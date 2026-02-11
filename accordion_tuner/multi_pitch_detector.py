@@ -66,7 +66,7 @@ class MultiPitchResult:
 
 
 class MultiPitchDetector:
-"""
+    """
     Multi-pitch detector using FFT + phase vocoder.
 
     Detects multiple simultaneous notes in the spectrum.

@@ -53,6 +53,23 @@ Click the "Settings" button to expand the settings panel with four tabs.
 - **Sensitivity** - Detection threshold (0.05-0.50). Lower values increase sensitivity but may detect more background noise.
 - **Reed Spread** - Maximum cents deviation to group as the same note (20-100¢). Increase if your tremolo reeds have wide detuning.
 
+**Measurement Stability:**
+
+These features help achieve stable, accurate measurements by accumulating data over time. The stability bar on each reed panel fills as the reading stabilizes.
+
+- **Temporal Smoothing** - Averages frequency measurements over time using weighted median filtering. This reduces jitter and provides more stable readings.
+  - Window: Number of samples to average (0.5-4 seconds at ~10 Hz update rate)
+  - Outliers are automatically rejected
+
+- **Precision Mode** - Accumulates raw audio samples for high-resolution FFT analysis. This provides finer frequency resolution than the standard detection, especially useful for measuring very close frequencies or achieving sub-Hz accuracy.
+  - Window: Audio accumulation duration (1-5 seconds)
+  - Resolution improves with longer windows:
+    - 2 seconds: ~0.5 Hz resolution
+    - 3 seconds: ~0.37 Hz resolution
+    - 4 seconds: ~0.28 Hz resolution
+  - Buffer automatically resets when the detected note changes
+  - Measurements become more accurate as the buffer fills
+
 #### ESPRIT Options
 
 When ESPRIT is selected, additional tuning options appear for fine-tuning close-frequency detection:

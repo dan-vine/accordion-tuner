@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSlider,
     QTabWidget,
@@ -88,7 +89,7 @@ class AccordionWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Accordion Reed Tuner")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(800, 540)
 
         # Detection - create first to get hop_size
         self._reference = A4_REFERENCE
@@ -281,7 +282,19 @@ class AccordionWindow(QMainWindow):
         panel.setObjectName("settingsPanel")
         panel.setStyleSheet(SETTINGS_PANEL_STYLE)
 
-        layout = QHBoxLayout(panel)
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+
+        # Scroll area for settings content
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        # Container widget for scrollable content
+        scroll_content = QWidget()
+        layout = QHBoxLayout(scroll_content)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
@@ -677,6 +690,13 @@ class AccordionWindow(QMainWindow):
         reset_btn.clicked.connect(self._reset_to_defaults)
         layout.addWidget(reset_btn)
 
+        # Set up scrollable content
+        scroll_area.setWidget(scroll_content)
+        panel_layout.addWidget(scroll_area)
+
+        # Set maximum height to enable scrolling on small screens
+        panel.setMaximumHeight(280)
+
         return panel
 
     def _populate_audio_devices(self):
@@ -699,13 +719,13 @@ class AccordionWindow(QMainWindow):
         self._settings_panel.setVisible(checked)
         self._settings_toggle.setText("▲ Settings" if checked else "▼ Settings")
 
-        # Resize window to accommodate settings panel (tabs are more compact)
+        # Resize window to accommodate settings panel (scrollable on small screens)
         if checked:
-            self.setMinimumHeight(680)
-            self.resize(self.width(), 680)
+            self.setMinimumHeight(620)
+            self.resize(self.width(), max(620, self.height()))
         else:
-            self.setMinimumHeight(600)
-            self.resize(self.width(), 600)
+            self.setMinimumHeight(540)
+            self.resize(self.width(), 540)
 
     def _on_algorithm_changed(self, index: int):
         """Handle algorithm combo change."""

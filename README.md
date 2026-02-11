@@ -9,7 +9,6 @@ A musical instrument tuner specialized for accordion reed tuning with multi-pitc
 - Multi-reed detection (1-4 simultaneous reeds)
 - Beat frequency calculation for tremolo/musette tuning
 - Custom tremolo tuning profiles (CSV/TSV)
-- 32 historical temperaments
 - Phase vocoder for accurate pitch detection
 - Hold mode for capturing best measurement
 - Measurement log for recording and exporting tuning data
@@ -100,9 +99,12 @@ When a profile is loaded, the cents display shows how far each reed is from its 
 
 | Mode | Reed 1 | Reed 2 | Reed 3 | Reed 4 |
 |------|--------|--------|--------|--------|
+| 1 reed | deviation from nearest target* | - | - | - |
 | 2 reed | reference (0¢) | deviation from (ref + beat) | - | - |
 | 3 reed | deviation from (ref - beat) | reference (0¢) | deviation from (ref + beat) | - |
 | 4 reed | deviation from (ref - beat) | reference (0¢) | reference (0¢) | deviation from (ref + beat) |
+
+*For 1 reed mode, the target is whichever of (ref + beat) or (ref - beat) is closest to the detected frequency. This allows tuning individual tremolo reeds one at a time.
 
 **Usage:**
 1. Go to Settings > Tuning tab

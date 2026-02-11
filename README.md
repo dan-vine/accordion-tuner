@@ -2,6 +2,8 @@
 
 A musical instrument strobe tuner specialized for accordion reed tuning with multi-pitch detection, temperament support, and beat frequency measurement.
 
+![Accordion Tuner Screenshot](images/screenshot.png)
+
 ## Features
 
 - Multi-reed detection (1-4 simultaneous reeds)

@@ -7,6 +7,7 @@ intentional detuning (tremolo/musette effects).
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -17,6 +18,9 @@ from .constants import (
 from .multi_pitch_detector import Maximum, MultiPitchDetector
 from .temperaments import Temperament
 
+if TYPE_CHECKING:
+    from .tremolo_profile import TremoloProfile
+
 
 @dataclass
 class ReedInfo:
@@ -24,6 +28,7 @@ class ReedInfo:
     frequency: float = 0.0      # Detected frequency in Hz
     cents: float = 0.0          # Deviation from reference in cents
     magnitude: float = 0.0      # Signal strength (for confidence)
+    target_cents: float | None = None  # Deviation from target (when profile active)
 
 
 @dataclass
@@ -93,6 +98,9 @@ class AccordionDetector:
         self._fft_freqs: np.ndarray | None = None
         self._fft_mags: np.ndarray | None = None
 
+        # Tremolo profile for target deviation calculation
+        self._tremolo_profile: "TremoloProfile | None" = None
+
     def process(self, samples: np.ndarray) -> AccordionResult:
         """
         Process audio samples and detect accordion reeds.
@@ -116,8 +124,16 @@ class AccordionDetector:
         if not multi_result.valid or not multi_result.maxima:
             return AccordionResult(spectrum_data=self._get_spectrum_tuple())
 
+        # Primary note from the first (strongest) detection
+        primary = multi_result.maxima[0]
+
         # Group peaks that correspond to the same note (within reed_spread_cents)
-        reeds = self._group_reeds(multi_result.maxima)
+        reeds = self._group_reeds(
+            multi_result.maxima,
+            primary.note_name,
+            primary.octave,
+            primary.ref_frequency,
+        )
 
         if not reeds:
             return AccordionResult(spectrum_data=self._get_spectrum_tuple())
@@ -127,9 +143,6 @@ class AccordionDetector:
         for i in range(len(reeds) - 1):
             beat = abs(reeds[i].frequency - reeds[i + 1].frequency)
             beat_freqs.append(beat)
-
-        # Primary note from the first (strongest) detection
-        primary = multi_result.maxima[0]
 
         return AccordionResult(
             valid=True,
@@ -141,12 +154,21 @@ class AccordionDetector:
             spectrum_data=self._get_spectrum_tuple(),
         )
 
-    def _group_reeds(self, maxima: list[Maximum]) -> list[ReedInfo]:
+    def _group_reeds(
+        self,
+        maxima: list[Maximum],
+        note_name: str,
+        octave: int,
+        ref_frequency: float,
+    ) -> list[ReedInfo]:
         """
         Group detected peaks into reeds for the same note.
 
         Args:
             maxima: List of detected frequency maxima
+            note_name: Note name for tremolo profile lookup
+            octave: Octave number for tremolo profile lookup
+            ref_frequency: Reference frequency for the note
 
         Returns:
             List of ReedInfo for reeds detected as playing the same note
@@ -183,12 +205,79 @@ class AccordionDetector:
                 frequency=m.frequency,
                 cents=cents_from_ref,
                 magnitude=m.magnitude,
+                target_cents=None,  # Will be computed after sorting
             ))
 
         # Sort by frequency
         reeds.sort(key=lambda r: r.frequency)
 
+        # Compute target_cents if tremolo profile is active
+        if self._tremolo_profile is not None and reeds:
+            beat_freq = self._tremolo_profile.get_beat_frequency(note_name, octave)
+            if beat_freq is not None:
+                self._compute_target_cents(reeds, ref_frequency, beat_freq)
+
         return reeds
+
+    def _compute_target_cents(
+        self,
+        reeds: list[ReedInfo],
+        ref_frequency: float,
+        beat_frequency: float,
+    ) -> None:
+        """
+        Compute target_cents for each reed based on tremolo profile.
+
+        Display logic by reed mode:
+        - 1 reed: deviation from target (ref ± beat)
+        - 2 reed: Reed 1 = reference (0¢), Reed 2 = deviation from (ref + beat)
+        - 3 reed: Reed 1 = deviation from (ref - beat), Reed 2 = reference (0¢),
+                  Reed 3 = deviation from (ref + beat)
+        - 4 reed: Reed 1 = deviation from (ref - beat), Reed 2 = reference (0¢),
+                  Reed 3 = reference (0¢), Reed 4 = deviation from (ref + beat)
+
+        Args:
+            reeds: List of ReedInfo (already sorted by frequency)
+            ref_frequency: Reference frequency for the note
+            beat_frequency: Target beat frequency from profile
+        """
+        num_reeds = len(reeds)
+
+        if num_reeds == 1:
+            # Single reed - show deviation from nearest target (ref + beat or ref - beat)
+            # Choose whichever is closer
+            target_high = ref_frequency + beat_frequency
+            target_low = ref_frequency - beat_frequency
+            freq = reeds[0].frequency
+            if abs(freq - target_high) < abs(freq - target_low):
+                target = target_high
+            else:
+                target = target_low
+            reeds[0].target_cents = 1200 * np.log2(freq / target)
+
+        elif num_reeds == 2:
+            # 2 reeds: Reed 1 = reference, Reed 2 = ref + beat
+            reeds[0].target_cents = reeds[0].cents  # deviation from reference
+            target = ref_frequency + beat_frequency
+            reeds[1].target_cents = 1200 * np.log2(reeds[1].frequency / target)
+
+        elif num_reeds == 3:
+            # 3 reeds: Reed 1 = ref - beat, Reed 2 = reference, Reed 3 = ref + beat
+            target_low = ref_frequency - beat_frequency
+            reeds[0].target_cents = 1200 * np.log2(reeds[0].frequency / target_low)
+            reeds[1].target_cents = reeds[1].cents  # deviation from reference
+            target_high = ref_frequency + beat_frequency
+            reeds[2].target_cents = 1200 * np.log2(reeds[2].frequency / target_high)
+
+        elif num_reeds >= 4:
+            # 4 reeds: Reed 1 = ref - beat, Reed 2 = reference, Reed 3 = reference,
+            #          Reed 4 = ref + beat
+            target_low = ref_frequency - beat_frequency
+            reeds[0].target_cents = 1200 * np.log2(reeds[0].frequency / target_low)
+            reeds[1].target_cents = reeds[1].cents  # deviation from reference
+            reeds[2].target_cents = reeds[2].cents  # deviation from reference
+            target_high = ref_frequency + beat_frequency
+            reeds[3].target_cents = 1200 * np.log2(reeds[3].frequency / target_high)
 
     def _compute_spectrum(self, samples: np.ndarray):
         """Compute FFT spectrum for display with zero-padding for finer resolution."""
@@ -269,6 +358,19 @@ class AccordionDetector:
     def set_fundamental_filter(self, enabled: bool):
         """Enable/disable fundamental filter (only detect harmonics)."""
         self._detector.set_fundamental_filter(enabled)
+
+    def set_tremolo_profile(self, profile: "TremoloProfile | None") -> None:
+        """
+        Set the tremolo tuning profile.
+
+        When a profile is active, target_cents will be computed for each reed
+        showing deviation from the target frequency based on the profile's
+        beat frequency for that note.
+
+        Args:
+            profile: TremoloProfile to use, or None to disable
+        """
+        self._tremolo_profile = profile
 
     def set_downsample(self, enabled: bool):
         """Enable/disable downsampling for better low frequency detection."""

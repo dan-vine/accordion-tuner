@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
 from ..accordion import AccordionDetector, AccordionResult
 from ..constants import A4_REFERENCE, NOTE_NAMES, SAMPLE_RATE
 from ..temperaments import Temperament
+from ..tremolo_profile import TremoloProfile, load_profile
 from .measurement_log import MeasurementLogWindow
 from .note_display import NoteDisplay
 from .reed_panel import ReedPanel
@@ -69,6 +71,7 @@ class AccordionWindow(QMainWindow):
         'zoom_spectrum': True,
         'hold_mode': False,
         'settings_expanded': False,
+        'tremolo_profile_path': '',  # Path to last loaded profile
     }
 
     def __init__(self):
@@ -107,6 +110,10 @@ class AccordionWindow(QMainWindow):
         # UI components
         self._reed_panels: list[ReedPanel] = []
         self._settings_expanded = False
+
+        # Tremolo profile state
+        self._tremolo_profile: TremoloProfile | None = None
+        self._loaded_profiles: dict[str, TremoloProfile] = {}  # name -> profile
 
         # Measurement log window state
         self._log_window: MeasurementLogWindow | None = None
@@ -340,12 +347,16 @@ class AccordionWindow(QMainWindow):
 
         # === Tuning tab ===
         tuning_tab = QWidget()
-        tuning_layout = QHBoxLayout(tuning_tab)
-        tuning_layout.setSpacing(20)
+        tuning_layout = QVBoxLayout(tuning_tab)
+        tuning_layout.setSpacing(10)
         tuning_layout.setContentsMargins(10, 10, 10, 10)
 
+        # Row 1: Temperament, Key, Transpose
+        row1 = QHBoxLayout()
+        row1.setSpacing(20)
+
         # Temperament
-        tuning_layout.addWidget(QLabel("Temperament:"))
+        row1.addWidget(QLabel("Temperament:"))
         self._temperament_combo = QComboBox()
         self._temperament_combo.setFixedWidth(140)
         temperament_names = [
@@ -361,23 +372,23 @@ class AccordionWindow(QMainWindow):
         self._temperament_combo.addItems(temperament_names)
         self._temperament_combo.setCurrentIndex(Temperament.EQUAL)
         self._temperament_combo.currentIndexChanged.connect(self._on_temperament_changed)
-        tuning_layout.addWidget(self._temperament_combo)
+        row1.addWidget(self._temperament_combo)
 
-        tuning_layout.addSpacing(20)
+        row1.addSpacing(20)
 
         # Key
-        tuning_layout.addWidget(QLabel("Key:"))
+        row1.addWidget(QLabel("Key:"))
         self._key_combo = QComboBox()
         self._key_combo.setFixedWidth(60)
         self._key_combo.addItems(NOTE_NAMES)
         self._key_combo.setCurrentIndex(0)
         self._key_combo.currentIndexChanged.connect(self._on_key_changed)
-        tuning_layout.addWidget(self._key_combo)
+        row1.addWidget(self._key_combo)
 
-        tuning_layout.addSpacing(20)
+        row1.addSpacing(20)
 
         # Transpose
-        tuning_layout.addWidget(QLabel("Transpose:"))
+        row1.addWidget(QLabel("Transpose:"))
         self._transpose_spin = QDoubleSpinBox()
         self._transpose_spin.setFixedWidth(70)
         self._transpose_spin.setRange(-6, 6)
@@ -385,9 +396,35 @@ class AccordionWindow(QMainWindow):
         self._transpose_spin.setDecimals(0)
         self._transpose_spin.setSuffix(" st")
         self._transpose_spin.setToolTip("Transpose display for transposing instruments")
-        tuning_layout.addWidget(self._transpose_spin)
+        row1.addWidget(self._transpose_spin)
 
-        tuning_layout.addStretch()
+        row1.addStretch()
+        tuning_layout.addLayout(row1)
+
+        # Row 2: Tremolo Profile
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+
+        row2.addWidget(QLabel("Tremolo Profile:"))
+        self._profile_combo = QComboBox()
+        self._profile_combo.setFixedWidth(180)
+        self._profile_combo.addItem("None")
+        self._profile_combo.setToolTip("Select a tremolo tuning profile")
+        self._profile_combo.currentIndexChanged.connect(self._on_profile_changed)
+        row2.addWidget(self._profile_combo)
+
+        self._load_profile_btn = QPushButton("Load...")
+        self._load_profile_btn.setToolTip("Load a tremolo profile from CSV/TSV file")
+        self._load_profile_btn.clicked.connect(self._on_load_profile)
+        row2.addWidget(self._load_profile_btn)
+
+        self._clear_profile_btn = QPushButton("Clear")
+        self._clear_profile_btn.setToolTip("Remove all loaded profiles")
+        self._clear_profile_btn.clicked.connect(self._on_clear_profiles)
+        row2.addWidget(self._clear_profile_btn)
+
+        row2.addStretch()
+        tuning_layout.addLayout(row2)
 
         tabs.addTab(tuning_tab, "Tuning")
 
@@ -508,6 +545,65 @@ class AccordionWindow(QMainWindow):
     def _on_key_changed(self, index: int):
         """Handle key combo change."""
         self._detector.set_key(index)
+
+    def _on_profile_changed(self, index: int):
+        """Handle tremolo profile selection change."""
+        if index == 0:
+            # "None" selected
+            self._tremolo_profile = None
+            self._detector.set_tremolo_profile(None)
+        else:
+            profile_name = self._profile_combo.currentText()
+            if profile_name in self._loaded_profiles:
+                self._tremolo_profile = self._loaded_profiles[profile_name]
+                self._detector.set_tremolo_profile(self._tremolo_profile)
+
+    def _on_load_profile(self):
+        """Handle load profile button click."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Tremolo Profile",
+            "",
+            "Profile Files (*.csv *.tsv *.txt);;All Files (*.*)",
+        )
+        if not file_path:
+            return
+
+        try:
+            profile = load_profile(file_path)
+
+            # Add to loaded profiles
+            self._loaded_profiles[profile.name] = profile
+
+            # Add to combo if not already present
+            existing_items = [self._profile_combo.itemText(i) for i in range(self._profile_combo.count())]
+            if profile.name not in existing_items:
+                self._profile_combo.addItem(profile.name)
+
+            # Select the newly loaded profile
+            index = self._profile_combo.findText(profile.name)
+            if index >= 0:
+                self._profile_combo.setCurrentIndex(index)
+
+        except FileNotFoundError as e:
+            QMessageBox.warning(self, "Load Error", f"File not found: {e}")
+        except ValueError as e:
+            QMessageBox.warning(self, "Load Error", f"Invalid profile format: {e}")
+        except Exception as e:
+            QMessageBox.warning(self, "Load Error", f"Failed to load profile: {e}")
+
+    def _on_clear_profiles(self):
+        """Handle clear profiles button click."""
+        # Reset to "None"
+        self._profile_combo.setCurrentIndex(0)
+
+        # Remove all profiles except "None"
+        while self._profile_combo.count() > 1:
+            self._profile_combo.removeItem(1)
+
+        self._loaded_profiles.clear()
+        self._tremolo_profile = None
+        self._detector.set_tremolo_profile(None)
 
     def _on_lock_display_changed(self, state):
         """Handle lock display checkbox change."""
@@ -758,9 +854,10 @@ class AccordionWindow(QMainWindow):
                     elif i == num_reeds - 1 and len(result.beat_frequencies) > i - 1:
                         beat_freq = result.beat_frequencies[-1]
 
-                panel.set_data(reed.frequency, reed.cents, beat_freq)
-                # Update unified meter with this reed's cents
-                self._multi_meter.set_reed_data(i, reed.cents)
+                panel.set_data(reed.frequency, reed.cents, beat_freq, reed.target_cents)
+                # Update unified meter with this reed's cents (or target_cents if available)
+                display_cents = reed.target_cents if reed.target_cents is not None else reed.cents
+                self._multi_meter.set_reed_data(i, display_cents)
             else:
                 panel.set_inactive()
                 self._multi_meter.set_reed_data(i, None)
@@ -846,6 +943,17 @@ class AccordionWindow(QMainWindow):
                     self._input_combo.setCurrentIndex(i)
                     break
 
+        # Tremolo profile
+        profile_path = settings.value("tremolo_profile_path", self.DEFAULTS['tremolo_profile_path'], type=str)
+        if profile_path:
+            try:
+                profile = load_profile(profile_path)
+                self._loaded_profiles[profile.name] = profile
+                self._profile_combo.addItem(profile.name)
+                self._profile_combo.setCurrentIndex(self._profile_combo.findText(profile.name))
+            except Exception:
+                pass  # Silently ignore if profile can't be loaded
+
         # Window geometry
         geometry = settings.value("window_geometry")
         if geometry:
@@ -881,6 +989,12 @@ class AccordionWindow(QMainWindow):
         # Input device (by name, not ID which may change)
         settings.setValue("input_device_name", self._input_combo.currentText())
 
+        # Tremolo profile (save path of currently selected profile)
+        if self._tremolo_profile is not None:
+            settings.setValue("tremolo_profile_path", self._tremolo_profile.path)
+        else:
+            settings.setValue("tremolo_profile_path", "")
+
         # Window geometry
         settings.setValue("window_geometry", self.saveGeometry())
 
@@ -914,6 +1028,9 @@ class AccordionWindow(QMainWindow):
         self._zoom_spectrum_cb.setChecked(self.DEFAULTS['zoom_spectrum'])
         self._hold_mode_cb.setChecked(self.DEFAULTS['hold_mode'])
         self._input_combo.setCurrentIndex(0)  # Default device
+
+        # Clear tremolo profiles
+        self._on_clear_profiles()
 
         # Collapse settings panel if expanded
         if self._settings_expanded:

@@ -95,7 +95,13 @@ class ReedPanel(QFrame):
         self.setMinimumWidth(160)
         self.setMinimumHeight(180)
 
-    def set_data(self, frequency: float, cents: float, beat_frequency: float = None):
+    def set_data(
+        self,
+        frequency: float,
+        cents: float,
+        beat_frequency: float = None,
+        target_cents: float | None = None,
+    ):
         """
         Set reed data.
 
@@ -103,14 +109,18 @@ class ReedPanel(QFrame):
             frequency: Detected frequency in Hz
             cents: Deviation from reference in cents
             beat_frequency: Beat frequency with next reed (optional)
+            target_cents: Deviation from target when tremolo profile is active (optional)
         """
         # Update frequency
         self._freq_label.setText(f"{frequency:.2f} Hz")
 
+        # Use target_cents if provided, otherwise use regular cents
+        display_cents = target_cents if target_cents is not None else cents
+
         # Update cents with sign and color
-        sign = "+" if cents >= 0 else ""
-        self._cents_label.setText(f"{sign}{cents:.1f}¢")
-        self._cents_label.setStyleSheet(f"color: {self._get_cents_color(cents)};")
+        sign = "+" if display_cents >= 0 else ""
+        self._cents_label.setText(f"{sign}{display_cents:.1f}¢")
+        self._cents_label.setStyleSheet(f"color: {self._get_cents_color(display_cents)};")
 
         # Update beat frequency
         if beat_frequency is not None:

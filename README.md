@@ -1,6 +1,6 @@
 # Accordion Tuner
 
-A musical instrument strobe tuner specialized for accordion reed tuning with multi-pitch detection, temperament support, and beat frequency measurement.
+A musical instrument tuner specialized for accordion reed tuning with multi-pitch detection, temperament support, and beat frequency measurement.
 
 ![Accordion Tuner Screenshot](images/screenshot.png)
 

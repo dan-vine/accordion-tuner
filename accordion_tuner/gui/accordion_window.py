@@ -80,6 +80,9 @@ class AccordionWindow(QMainWindow):
         # Smoothing settings
         'smoothing_enabled': True,
         'smoothing_window': 20,  # samples (~2 seconds at 10 Hz)
+        # Precision mode settings
+        'precision_enabled': True,
+        'precision_window': 30,  # 3.0 seconds
     }
 
     def __init__(self):
@@ -404,6 +407,41 @@ class AccordionWindow(QMainWindow):
 
         smoothing_row.addStretch()
         detection_layout.addLayout(smoothing_row)
+
+        # Precision mode row
+        precision_row = QHBoxLayout()
+        precision_row.setSpacing(20)
+
+        self._precision_cb = QCheckBox("Precision Mode")
+        self._precision_cb.setToolTip(
+            "Accumulate audio for high-resolution frequency detection.\n"
+            "Provides ~0.5 Hz or better resolution after 2-3 seconds.\n"
+            "Measurements become more stable as buffer fills."
+        )
+        self._precision_cb.setChecked(True)
+        self._precision_cb.stateChanged.connect(self._on_precision_changed)
+        precision_row.addWidget(self._precision_cb)
+
+        # Precision window slider
+        prec_window_layout = QHBoxLayout()
+        prec_window_layout.addWidget(QLabel("Window:"))
+        self._precision_slider = QSlider(Qt.Orientation.Horizontal)
+        self._precision_slider.setRange(10, 50)  # 1.0 to 5.0 seconds
+        self._precision_slider.setValue(30)  # 3.0 seconds default
+        self._precision_slider.setMinimumWidth(100)
+        self._precision_slider.setToolTip(
+            "Precision mode accumulation window.\n"
+            "2s = 0.5 Hz resolution, 4s = 0.25 Hz resolution"
+        )
+        self._precision_slider.valueChanged.connect(self._on_precision_window_changed)
+        prec_window_layout.addWidget(self._precision_slider)
+        self._precision_window_value = QLabel("3.0s")
+        self._precision_window_value.setFixedWidth(35)
+        prec_window_layout.addWidget(self._precision_window_value)
+        precision_row.addLayout(prec_window_layout)
+
+        precision_row.addStretch()
+        detection_layout.addLayout(precision_row)
 
         # ESPRIT-specific options (visible only when ESPRIT selected)
         self._esprit_frame = QFrame()
@@ -746,6 +784,18 @@ class AccordionWindow(QMainWindow):
         time_seconds = value / 10.0
         self._smoothing_value.setText(f"{time_seconds:.1f}s")
 
+    def _on_precision_changed(self, state):
+        """Handle precision mode checkbox change."""
+        enabled = self._precision_cb.isChecked()
+        self._detector.set_precision_enabled(enabled)
+        self._precision_slider.setEnabled(enabled)
+
+    def _on_precision_window_changed(self, value: int):
+        """Handle precision window slider change."""
+        duration = value / 10.0  # Convert to seconds
+        self._detector.set_precision_window(duration)
+        self._precision_window_value.setText(f"{duration:.1f}s")
+
     def _on_temperament_changed(self, index: int):
         """Handle temperament combo change."""
         self._detector.set_temperament(Temperament(index))
@@ -1069,6 +1119,8 @@ class AccordionWindow(QMainWindow):
                     reed.target_cents,
                     reed.stability,
                     reed.sample_count,
+                    reed.precision_frequency,
+                    reed.precision_cents,
                 )
                 # Update unified meter with this reed's cents (or target_cents if available)
                 display_cents = reed.target_cents if reed.target_cents is not None else reed.cents
@@ -1158,6 +1210,14 @@ class AccordionWindow(QMainWindow):
         smoothing_window = settings.value("smoothing_window", self.DEFAULTS['smoothing_window'], type=int)
         self._smoothing_slider.setValue(smoothing_window)
 
+        # Precision mode settings
+        precision_enabled = settings.value("precision_enabled", self.DEFAULTS['precision_enabled'], type=bool)
+        self._precision_cb.setChecked(precision_enabled)
+        self._precision_slider.setEnabled(precision_enabled)
+
+        precision_window = settings.value("precision_window", self.DEFAULTS['precision_window'], type=int)
+        self._precision_slider.setValue(precision_window)
+
         # Tuning settings
         temperament = settings.value("temperament", self.DEFAULTS['temperament'], type=int)
         self._temperament_combo.setCurrentIndex(temperament)
@@ -1231,6 +1291,10 @@ class AccordionWindow(QMainWindow):
         settings.setValue("smoothing_enabled", self._smoothing_cb.isChecked())
         settings.setValue("smoothing_window", self._smoothing_slider.value())
 
+        # Precision mode settings
+        settings.setValue("precision_enabled", self._precision_cb.isChecked())
+        settings.setValue("precision_window", self._precision_slider.value())
+
         # Tuning settings
         settings.setValue("temperament", self._temperament_combo.currentIndex())
         settings.setValue("key", self._key_combo.currentIndex())
@@ -1283,6 +1347,8 @@ class AccordionWindow(QMainWindow):
         self._esprit_offsets_combo.setCurrentIndex(self.DEFAULTS['esprit_offsets'])
         self._smoothing_cb.setChecked(self.DEFAULTS['smoothing_enabled'])
         self._smoothing_slider.setValue(self.DEFAULTS['smoothing_window'])
+        self._precision_cb.setChecked(self.DEFAULTS['precision_enabled'])
+        self._precision_slider.setValue(self.DEFAULTS['precision_window'])
         self._temperament_combo.setCurrentIndex(self.DEFAULTS['temperament'])
         self._key_combo.setCurrentIndex(self.DEFAULTS['key'])
         self._transpose_spin.setValue(self.DEFAULTS['transpose'])

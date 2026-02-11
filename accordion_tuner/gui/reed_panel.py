@@ -122,6 +122,8 @@ class ReedPanel(QFrame):
         target_cents: float | None = None,
         stability: float = 0.0,
         sample_count: int = 0,
+        precision_frequency: float | None = None,
+        precision_cents: float | None = None,
     ):
         """
         Set reed data.
@@ -133,12 +135,20 @@ class ReedPanel(QFrame):
             target_cents: Deviation from target when tremolo profile is active (optional)
             stability: Measurement stability (0.0-1.0)
             sample_count: Number of samples in the smoothed average
+            precision_frequency: High-resolution frequency (when precision mode active)
+            precision_cents: High-resolution cents deviation
         """
-        # Update frequency
-        self._freq_label.setText(f"{frequency:.2f} Hz")
+        # Use precision frequency if available, otherwise regular
+        display_freq = precision_frequency if precision_frequency is not None else frequency
+        self._freq_label.setText(f"{display_freq:.2f} Hz")
 
-        # Use target_cents if provided, otherwise use regular cents
-        display_cents = target_cents if target_cents is not None else cents
+        # Use target_cents if provided, then precision_cents, then regular cents
+        if target_cents is not None:
+            display_cents = target_cents
+        elif precision_cents is not None:
+            display_cents = precision_cents
+        else:
+            display_cents = cents
 
         # Update cents with sign and color
         sign = "+" if display_cents >= 0 else ""

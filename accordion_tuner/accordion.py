@@ -6,6 +6,7 @@ suitable for accordion tuning where 2-4 reeds may play simultaneously with
 intentional detuning (tremolo/musette effects).
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -40,6 +41,19 @@ class ReedInfo:
     target_cents: float | None = None  # Deviation from target (when profile active)
     stability: float = 0.0      # Measurement stability (0.0-1.0, higher = more stable)
     sample_count: int = 0       # Number of samples in the smoothed average
+    # Precision mode fields (from long-window FFT)
+    precision_frequency: float | None = None  # High-resolution frequency (when precision mode enabled)
+    precision_cents: float | None = None      # High-resolution cents deviation
+
+
+@dataclass
+class PrecisionInfo:
+    """Information about precision detection state."""
+    enabled: bool = False
+    fill_level: float = 0.0      # Buffer fill level (0.0 to 1.0)
+    resolution: float = 0.0      # Current frequency resolution in Hz
+    duration: float = 0.0        # Duration of accumulated audio in seconds
+    is_stable: bool = False      # True if buffer is full enough for reliable measurement
 
 
 @dataclass
@@ -52,6 +66,7 @@ class AccordionResult:
     reeds: list[ReedInfo] = field(default_factory=list)
     beat_frequencies: list[float] = field(default_factory=list)  # |f1-f2|, |f2-f3|, etc.
     spectrum_data: tuple[np.ndarray, np.ndarray] | None = None  # (frequencies, magnitudes)
+    precision_info: PrecisionInfo | None = None  # Precision mode state
 
     @property
     def reed_count(self) -> int:
@@ -121,6 +136,15 @@ class AccordionDetector:
         )
         self._smoothing_enabled = True
 
+        # Precision mode: accumulate audio for high-resolution FFT
+        self._precision_enabled = False
+        self._precision_window = 3.0  # seconds
+        self._precision_buffer_size = int(self.sample_rate * self._precision_window)
+        self._precision_buffer: deque[float] = deque(maxlen=self._precision_buffer_size)
+        self._precision_stable_threshold = 0.75  # 75% fill for stable measurement
+        self._precision_current_note: str | None = None
+        self._precision_current_octave: int | None = None
+
     def _create_detector(
         self, detector_type: DetectorType
     ) -> MultiPitchDetector | EspritPitchDetector:
@@ -188,7 +212,11 @@ class AccordionDetector:
 
         if not multi_result.valid or not multi_result.maxima:
             self._smoother.set_inactive()
-            return AccordionResult(spectrum_data=self._get_spectrum_tuple())
+            precision_info = self._get_precision_info() if self._precision_enabled else None
+            return AccordionResult(
+                spectrum_data=self._get_spectrum_tuple(),
+                precision_info=precision_info,
+            )
 
         # Primary note from the first (strongest) detection
         primary = multi_result.maxima[0]
@@ -203,7 +231,11 @@ class AccordionDetector:
 
         if not reeds:
             self._smoother.set_inactive()
-            return AccordionResult(spectrum_data=self._get_spectrum_tuple())
+            precision_info = self._get_precision_info() if self._precision_enabled else None
+            return AccordionResult(
+                spectrum_data=self._get_spectrum_tuple(),
+                precision_info=precision_info,
+            )
 
         # Apply temporal smoothing if enabled
         if self._smoothing_enabled:
@@ -214,10 +246,24 @@ class AccordionDetector:
                 reeds,
             )
 
+        # Apply precision mode if enabled
+        precision_info = None
+        if self._precision_enabled:
+            reeds, precision_info = self._apply_precision(
+                samples,
+                primary.note_name,
+                primary.octave,
+                primary.ref_frequency,
+                reeds,
+            )
+
         # Calculate beat frequencies between adjacent reeds
+        # Use precision frequencies if available, otherwise regular frequencies
         beat_freqs = []
         for i in range(len(reeds) - 1):
-            beat = abs(reeds[i].frequency - reeds[i + 1].frequency)
+            f1 = reeds[i].precision_frequency or reeds[i].frequency
+            f2 = reeds[i + 1].precision_frequency or reeds[i + 1].frequency
+            beat = abs(f1 - f2)
             beat_freqs.append(beat)
 
         return AccordionResult(
@@ -228,6 +274,7 @@ class AccordionDetector:
             reeds=reeds,
             beat_frequencies=beat_freqs,
             spectrum_data=self._get_spectrum_tuple(),
+            precision_info=precision_info,
         )
 
     def _apply_smoothing(
@@ -410,6 +457,192 @@ class AccordionDetector:
             target_high = ref_frequency + beat_frequency
             reeds[3].target_cents = 1200 * np.log2(reeds[3].frequency / target_high)
 
+    def _apply_precision(
+        self,
+        samples: np.ndarray,
+        note_name: str,
+        octave: int,
+        ref_frequency: float,
+        reeds: list[ReedInfo],
+    ) -> tuple[list[ReedInfo], PrecisionInfo]:
+        """
+        Apply precision mode analysis using accumulated audio.
+
+        Args:
+            samples: Current audio samples
+            note_name: Detected note name
+            octave: Detected octave
+            ref_frequency: Reference frequency for the note
+            reeds: Current reed measurements
+
+        Returns:
+            Tuple of (updated reeds with precision data, precision info)
+        """
+        # Check for note change - reset buffer if note changed
+        if (self._precision_current_note != note_name or
+                self._precision_current_octave != octave):
+            self._precision_buffer.clear()
+            self._precision_current_note = note_name
+            self._precision_current_octave = octave
+
+        # Add new samples to precision buffer
+        for sample in samples:
+            self._precision_buffer.append(sample)
+
+        # Get precision info
+        precision_info = self._get_precision_info()
+
+        # Only run precision FFT if we have enough samples
+        if len(self._precision_buffer) < self.sample_rate // 2:  # At least 0.5 seconds
+            return reeds, precision_info
+
+        # Run precision FFT analysis
+        precision_freqs = self._precision_fft_analysis(reeds)
+
+        # Update reeds with precision frequencies
+        for i, reed in enumerate(reeds):
+            if i < len(precision_freqs) and precision_freqs[i] is not None:
+                reed.precision_frequency = precision_freqs[i]
+                # Calculate precision cents
+                if ref_frequency > 0:
+                    reed.precision_cents = 1200 * np.log2(
+                        precision_freqs[i] / ref_frequency
+                    )
+
+        return reeds, precision_info
+
+    def _precision_fft_analysis(self, reeds: list[ReedInfo]) -> list[float | None]:
+        """
+        Run precision FFT on accumulated buffer to refine frequency measurements.
+
+        Args:
+            reeds: Current reed measurements (used to know where to look)
+
+        Returns:
+            List of precision frequencies for each reed, None if not found
+        """
+        buffer_len = len(self._precision_buffer)
+        if buffer_len < 100:
+            return [None] * len(reeds)
+
+        # Convert buffer to numpy array
+        signal = np.array(self._precision_buffer, dtype=np.float64)
+
+        # Normalize
+        signal_max = np.max(np.abs(signal))
+        if signal_max < 1e-6:
+            return [None] * len(reeds)
+        signal = signal / signal_max
+
+        # Apply window
+        window = np.hamming(buffer_len)
+        windowed = signal * window
+
+        # Zero-pad to next power of 2 for efficient FFT
+        n_fft = 1 << (buffer_len - 1).bit_length()
+        n_fft = max(n_fft, buffer_len * 2)  # At least 2x for interpolation
+
+        # FFT
+        spectrum = np.fft.rfft(windowed, n=n_fft)
+        magnitudes = np.abs(spectrum)
+        freqs = np.fft.rfftfreq(n_fft, 1.0 / self.sample_rate)
+
+        # First, find ALL peaks in the frequency range of interest
+        # (around all the reed frequencies)
+        if not reeds:
+            return []
+
+        min_freq = min(r.frequency for r in reeds) - 10.0
+        max_freq = max(r.frequency for r in reeds) + 10.0
+        min_freq = max(20.0, min_freq)
+        max_freq = min(2000.0, max_freq)
+
+        low_idx = np.searchsorted(freqs, min_freq)
+        high_idx = np.searchsorted(freqs, max_freq)
+
+        if low_idx >= high_idx or high_idx >= len(magnitudes):
+            return [None] * len(reeds)
+
+        search_mags = magnitudes[low_idx:high_idx]
+        search_freqs = freqs[low_idx:high_idx]
+
+        if len(search_mags) < 3:
+            return [None] * len(reeds)
+
+        # Find all local maxima (peaks)
+        max_mag = np.max(search_mags)
+        threshold = max_mag * 0.1  # At least 10% of max
+
+        all_peaks = []  # List of (frequency, magnitude)
+        for i in range(1, len(search_mags) - 1):
+            if search_mags[i] < threshold:
+                continue
+            if search_mags[i] > search_mags[i-1] and search_mags[i] > search_mags[i+1]:
+                # Parabolic interpolation for sub-bin accuracy
+                y1, y2, y3 = search_mags[i-1], search_mags[i], search_mags[i+1]
+                denom = y1 - 2*y2 + y3
+                if abs(denom) > 1e-10:
+                    delta = 0.5 * (y1 - y3) / denom
+                    freq_step = search_freqs[1] - search_freqs[0]
+                    peak_freq = search_freqs[i] + delta * freq_step
+                    peak_mag = y2 - 0.25 * (y1 - y3) * delta
+                else:
+                    peak_freq = search_freqs[i]
+                    peak_mag = y2
+                all_peaks.append((peak_freq, peak_mag))
+
+        if not all_peaks:
+            return [None] * len(reeds)
+
+        # Sort peaks by magnitude (strongest first)
+        all_peaks.sort(key=lambda x: x[1], reverse=True)
+
+        # Assign peaks to reeds - each peak can only be used once
+        # Match each reed to the closest available peak
+        precision_freqs: list[float | None] = [None] * len(reeds)
+        used_peaks = set()
+
+        # Sort reeds by their detected frequency
+        reed_indices = sorted(range(len(reeds)), key=lambda i: reeds[i].frequency)
+
+        for reed_idx in reed_indices:
+            reed = reeds[reed_idx]
+            target_freq = reed.frequency
+
+            # Find closest unused peak within ±5 Hz
+            best_peak = None
+            best_dist = float('inf')
+
+            for i, (peak_freq, peak_mag) in enumerate(all_peaks):
+                if i in used_peaks:
+                    continue
+                dist = abs(peak_freq - target_freq)
+                if dist < 5.0 and dist < best_dist:
+                    best_dist = dist
+                    best_peak = i
+
+            if best_peak is not None:
+                precision_freqs[reed_idx] = all_peaks[best_peak][0]
+                used_peaks.add(best_peak)
+
+        return precision_freqs
+
+    def _get_precision_info(self) -> PrecisionInfo:
+        """Get current precision mode state."""
+        buffer_len = len(self._precision_buffer)
+        fill_level = buffer_len / self._precision_buffer_size
+        duration = buffer_len / self.sample_rate
+        resolution = self.sample_rate / buffer_len if buffer_len > 0 else float('inf')
+        is_stable = fill_level >= self._precision_stable_threshold
+
+        return PrecisionInfo(
+            enabled=self._precision_enabled,
+            fill_level=fill_level,
+            resolution=resolution,
+            duration=duration,
+            is_stable=is_stable,
+        )
+
     def _compute_spectrum(self, samples: np.ndarray):
         """Compute FFT spectrum for display with zero-padding for finer resolution."""
         # Use the detector's accumulated buffer for full frequency resolution
@@ -578,6 +811,9 @@ class AccordionDetector:
         self._fft_freqs = None
         self._fft_mags = None
         self._smoother.reset()
+        self._precision_buffer.clear()
+        self._precision_current_note = None
+        self._precision_current_octave = None
 
     # Smoothing settings
     def set_smoothing_enabled(self, enabled: bool):
@@ -622,3 +858,61 @@ class AccordionDetector:
     def reset_smoothing(self):
         """Reset the smoother, clearing accumulated measurements."""
         self._smoother.reset()
+
+    # Precision mode settings
+    def set_precision_enabled(self, enabled: bool):
+        """
+        Enable or disable precision mode.
+
+        When enabled, accumulates audio over a longer window (2-4 seconds)
+        for high-resolution frequency detection. This provides ~0.5 Hz or
+        better resolution, improving measurement stability over time.
+
+        Args:
+            enabled: True to enable precision mode
+        """
+        self._precision_enabled = enabled
+        if not enabled:
+            self._precision_buffer.clear()
+
+    def is_precision_enabled(self) -> bool:
+        """Check if precision mode is enabled."""
+        return self._precision_enabled
+
+    def set_precision_window(self, duration: float):
+        """
+        Set the precision mode accumulation window.
+
+        Longer windows provide finer frequency resolution:
+        - 2 seconds: ~0.5 Hz resolution
+        - 3 seconds: ~0.37 Hz resolution
+        - 4 seconds: ~0.28 Hz resolution
+
+        Args:
+            duration: Window duration in seconds (1.0 to 5.0)
+        """
+        duration = max(1.0, min(5.0, duration))
+        self._precision_window = duration
+        self._precision_buffer_size = int(self.sample_rate * duration)
+        self._precision_buffer = deque(maxlen=self._precision_buffer_size)
+
+    def get_precision_window(self) -> float:
+        """Get current precision window duration in seconds."""
+        return self._precision_window
+
+    def get_precision_fill_level(self) -> float:
+        """Get precision buffer fill level (0.0 to 1.0)."""
+        return len(self._precision_buffer) / self._precision_buffer_size
+
+    def get_precision_resolution(self) -> float:
+        """Get current frequency resolution in Hz based on buffer fill."""
+        buffer_len = len(self._precision_buffer)
+        if buffer_len == 0:
+            return float('inf')
+        return self.sample_rate / buffer_len
+
+    def reset_precision(self):
+        """Reset precision buffer, clearing accumulated audio."""
+        self._precision_buffer.clear()
+        self._precision_current_note = None
+        self._precision_current_octave = None

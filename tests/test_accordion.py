@@ -4,6 +4,7 @@ Tests for accordion reed detection.
 
 import numpy as np
 import pytest
+
 from accordion_tuner.accordion import AccordionDetector, AccordionResult, ReedInfo
 
 

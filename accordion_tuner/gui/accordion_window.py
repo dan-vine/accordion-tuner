@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..accordion import AccordionDetector, AccordionResult
+from ..accordion import AccordionDetector, AccordionResult, DetectorType
 from ..constants import A4_REFERENCE, NOTE_NAMES, SAMPLE_RATE
 from ..temperaments import Temperament
 from ..tremolo_profile import TremoloProfile, load_profile
@@ -60,6 +60,7 @@ class AccordionWindow(QMainWindow):
     DEFAULTS = {
         'num_reeds': 3,
         'reference': 440.0,
+        'algorithm': 0,  # 0=FFT, 1=MUSIC, 2=ESPRIT
         'octave_filter': False,
         'fundamental_filter': False,
         'downsample': False,
@@ -72,6 +73,10 @@ class AccordionWindow(QMainWindow):
         'hold_mode': False,
         'settings_expanded': False,
         'tremolo_profile_path': '',  # Path to last loaded profile
+        # ESPRIT-specific settings
+        'esprit_width': 25,  # 0.25
+        'esprit_separation': 50,  # 0.50 Hz
+        'esprit_offsets': 0,  # Default offsets preset
     }
 
     def __init__(self):
@@ -283,6 +288,25 @@ class AccordionWindow(QMainWindow):
         detection_layout.setSpacing(8)
         detection_layout.setContentsMargins(10, 10, 10, 10)
 
+        # Algorithm row
+        algo_row = QHBoxLayout()
+        algo_row.setSpacing(20)
+
+        algo_row.addWidget(QLabel("Algorithm:"))
+        self._algorithm_combo = QComboBox()
+        self._algorithm_combo.setFixedWidth(160)
+        self._algorithm_combo.addItems(["FFT (Phase Vocoder)", "ESPRIT"])
+        self._algorithm_combo.setCurrentIndex(0)
+        self._algorithm_combo.setToolTip(
+            "FFT: Fast, reliable detection using phase vocoder\n"
+            "ESPRIT: Best for closely-spaced frequencies (1-5 Hz tremolo reeds)"
+        )
+        self._algorithm_combo.currentIndexChanged.connect(self._on_algorithm_changed)
+        algo_row.addWidget(self._algorithm_combo)
+
+        algo_row.addStretch()
+        detection_layout.addLayout(algo_row)
+
         # Checkboxes row
         checkbox_row = QHBoxLayout()
         checkbox_row.setSpacing(20)
@@ -300,7 +324,7 @@ class AccordionWindow(QMainWindow):
         checkbox_row.addWidget(self._fundamental_filter_cb)
 
         self._downsample_cb = QCheckBox("Downsample")
-        self._downsample_cb.setToolTip("Better low frequency detection")
+        self._downsample_cb.setToolTip("Better low frequency detection (FFT algorithm only)")
         self._downsample_cb.setChecked(False)
         self._downsample_cb.stateChanged.connect(self._on_downsample_changed)
         checkbox_row.addWidget(self._downsample_cb)
@@ -342,6 +366,98 @@ class AccordionWindow(QMainWindow):
 
         sliders_row.addStretch()
         detection_layout.addLayout(sliders_row)
+
+        # ESPRIT-specific options (visible only when ESPRIT selected)
+        self._esprit_frame = QFrame()
+        self._esprit_frame.setObjectName("espritFrame")
+        self._esprit_frame.setStyleSheet(f"""
+            QFrame#espritFrame {{
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 4px;
+                padding: 5px;
+                margin-top: 5px;
+            }}
+        """)
+        esprit_layout = QVBoxLayout(self._esprit_frame)
+        esprit_layout.setSpacing(6)
+        esprit_layout.setContentsMargins(8, 8, 8, 8)
+
+        esprit_header = QLabel("ESPRIT Options (for close frequency detection)")
+        esprit_header.setStyleSheet("font-weight: bold;")
+        esprit_layout.addWidget(esprit_header)
+
+        esprit_row1 = QHBoxLayout()
+        esprit_row1.setSpacing(15)
+
+        # Width Threshold slider
+        width_layout = QHBoxLayout()
+        width_layout.addWidget(QLabel("Width Threshold:"))
+        self._esprit_width_slider = QSlider(Qt.Orientation.Horizontal)
+        self._esprit_width_slider.setRange(10, 50)  # 0.10 to 0.50
+        self._esprit_width_slider.setValue(25)  # 0.25 default
+        self._esprit_width_slider.setMinimumWidth(80)
+        self._esprit_width_slider.setToolTip(
+            "Threshold for detecting merged peaks.\n"
+            "Lower = more sensitive to close frequencies.\n"
+            "Higher = fewer false positives."
+        )
+        self._esprit_width_slider.valueChanged.connect(self._on_esprit_width_changed)
+        width_layout.addWidget(self._esprit_width_slider)
+        self._esprit_width_value = QLabel("0.25")
+        self._esprit_width_value.setFixedWidth(35)
+        width_layout.addWidget(self._esprit_width_value)
+        esprit_row1.addLayout(width_layout)
+
+        # Min Separation slider
+        sep_layout = QHBoxLayout()
+        sep_layout.addWidget(QLabel("Min Separation:"))
+        self._esprit_sep_slider = QSlider(Qt.Orientation.Horizontal)
+        self._esprit_sep_slider.setRange(30, 100)  # 0.30 to 1.00 Hz
+        self._esprit_sep_slider.setValue(50)  # 0.50 Hz default
+        self._esprit_sep_slider.setMinimumWidth(80)
+        self._esprit_sep_slider.setToolTip(
+            "Minimum Hz between detected frequencies.\n"
+            "Lower = can resolve closer frequencies.\n"
+            "Higher = fewer spurious detections."
+        )
+        self._esprit_sep_slider.valueChanged.connect(self._on_esprit_sep_changed)
+        sep_layout.addWidget(self._esprit_sep_slider)
+        self._esprit_sep_value = QLabel("0.50 Hz")
+        self._esprit_sep_value.setFixedWidth(50)
+        sep_layout.addWidget(self._esprit_sep_value)
+        esprit_row1.addLayout(sep_layout)
+
+        esprit_row1.addStretch()
+        esprit_layout.addLayout(esprit_row1)
+
+        esprit_row2 = QHBoxLayout()
+        esprit_row2.setSpacing(15)
+
+        # Candidate Offsets combo
+        offset_layout = QHBoxLayout()
+        offset_layout.addWidget(QLabel("Candidate Offsets:"))
+        self._esprit_offsets_combo = QComboBox()
+        self._esprit_offsets_combo.setFixedWidth(180)
+        self._esprit_offsets_combo.addItems([
+            "±0.4, ±0.8 Hz (default)",
+            "±0.3, ±0.6 Hz (tighter)",
+            "±0.5, ±1.0 Hz (wider)",
+            "±0.4, ±0.8, ±1.2 Hz (extended)",
+            "None (disable)"
+        ])
+        self._esprit_offsets_combo.setToolTip(
+            "Frequency offsets added around merged peaks.\n"
+            "Helps ESPRIT resolve close frequencies."
+        )
+        self._esprit_offsets_combo.currentIndexChanged.connect(self._on_esprit_offsets_changed)
+        offset_layout.addWidget(self._esprit_offsets_combo)
+        esprit_row2.addLayout(offset_layout)
+
+        esprit_row2.addStretch()
+        esprit_layout.addLayout(esprit_row2)
+
+        detection_layout.addWidget(self._esprit_frame)
+        self._esprit_frame.setVisible(False)  # Hidden until ESPRIT selected
 
         tabs.addTab(detection_tab, "Detection")
 
@@ -514,6 +630,47 @@ class AccordionWindow(QMainWindow):
         else:
             self.setMinimumHeight(600)
             self.resize(self.width(), 600)
+
+    def _on_algorithm_changed(self, index: int):
+        """Handle algorithm combo change."""
+        if index == 1:
+            detector_type = DetectorType.ESPRIT
+        else:
+            detector_type = DetectorType.FFT
+        self._detector.set_detector_type(detector_type)
+
+        # Show/hide ESPRIT options
+        self._esprit_frame.setVisible(index == 1)
+
+        # Apply current ESPRIT settings when switching to ESPRIT
+        if index == 2:
+            self._on_esprit_width_changed(self._esprit_width_slider.value())
+            self._on_esprit_sep_changed(self._esprit_sep_slider.value())
+            self._on_esprit_offsets_changed(self._esprit_offsets_combo.currentIndex())
+
+    def _on_esprit_width_changed(self, value: int):
+        """Handle ESPRIT width threshold slider change."""
+        threshold = value / 100.0
+        self._detector.set_esprit_width_threshold(threshold)
+        self._esprit_width_value.setText(f"{threshold:.2f}")
+
+    def _on_esprit_sep_changed(self, value: int):
+        """Handle ESPRIT min separation slider change."""
+        separation = value / 100.0
+        self._detector.set_esprit_min_separation(separation)
+        self._esprit_sep_value.setText(f"{separation:.2f} Hz")
+
+    def _on_esprit_offsets_changed(self, index: int):
+        """Handle ESPRIT candidate offsets combo change."""
+        offset_presets = [
+            [-0.8, -0.4, 0.4, 0.8],          # default
+            [-0.6, -0.3, 0.3, 0.6],          # tighter
+            [-1.0, -0.5, 0.5, 1.0],          # wider
+            [-1.2, -0.8, -0.4, 0.4, 0.8, 1.2],  # extended
+            [],                               # none
+        ]
+        if index < len(offset_presets):
+            self._detector.set_esprit_candidate_offsets(offset_presets[index])
 
     def _on_octave_filter_changed(self, state):
         """Handle octave filter checkbox change."""
@@ -898,6 +1055,14 @@ class AccordionWindow(QMainWindow):
         self._ref_spinbox.setValue(reference)
 
         # Detection settings
+        algorithm = settings.value("algorithm", self.DEFAULTS['algorithm'], type=int)
+        # Migrate old settings: 0=FFT, 1=MUSIC(removed)->FFT, 2=ESPRIT->1
+        if algorithm == 2:
+            algorithm = 1  # ESPRIT is now index 1
+        elif algorithm == 1:
+            algorithm = 0  # MUSIC removed, fall back to FFT
+        self._algorithm_combo.setCurrentIndex(algorithm)
+
         octave_filter = settings.value("octave_filter", self.DEFAULTS['octave_filter'], type=bool)
         self._octave_filter_cb.setChecked(octave_filter)
 
@@ -912,6 +1077,20 @@ class AccordionWindow(QMainWindow):
 
         reed_spread = settings.value("reed_spread", self.DEFAULTS['reed_spread'], type=int)
         self._reed_spread_slider.setValue(reed_spread)
+
+        # ESPRIT settings
+        esprit_width = settings.value("esprit_width", self.DEFAULTS['esprit_width'], type=int)
+        self._esprit_width_slider.setValue(esprit_width)
+
+        esprit_separation = settings.value("esprit_separation", self.DEFAULTS['esprit_separation'], type=int)
+        self._esprit_sep_slider.setValue(esprit_separation)
+
+        esprit_offsets = settings.value("esprit_offsets", self.DEFAULTS['esprit_offsets'], type=int)
+        self._esprit_offsets_combo.setCurrentIndex(esprit_offsets)
+
+        # Show ESPRIT frame if ESPRIT is selected
+        if algorithm == 1:
+            self._esprit_frame.setVisible(True)
 
         # Tuning settings
         temperament = settings.value("temperament", self.DEFAULTS['temperament'], type=int)
@@ -970,11 +1149,17 @@ class AccordionWindow(QMainWindow):
         settings.setValue("reference", self._ref_spinbox.value())
 
         # Detection settings
+        settings.setValue("algorithm", self._algorithm_combo.currentIndex())
         settings.setValue("octave_filter", self._octave_filter_cb.isChecked())
         settings.setValue("fundamental_filter", self._fundamental_filter_cb.isChecked())
         settings.setValue("downsample", self._downsample_cb.isChecked())
         settings.setValue("sensitivity", self._sensitivity_slider.value())
         settings.setValue("reed_spread", self._reed_spread_slider.value())
+
+        # ESPRIT settings
+        settings.setValue("esprit_width", self._esprit_width_slider.value())
+        settings.setValue("esprit_separation", self._esprit_sep_slider.value())
+        settings.setValue("esprit_offsets", self._esprit_offsets_combo.currentIndex())
 
         # Tuning settings
         settings.setValue("temperament", self._temperament_combo.currentIndex())
@@ -1017,11 +1202,15 @@ class AccordionWindow(QMainWindow):
         # Reset all widgets to defaults (this triggers their change handlers)
         self._reeds_combo.setCurrentIndex(self.DEFAULTS['num_reeds'] - 1)
         self._ref_spinbox.setValue(self.DEFAULTS['reference'])
+        self._algorithm_combo.setCurrentIndex(self.DEFAULTS['algorithm'])
         self._octave_filter_cb.setChecked(self.DEFAULTS['octave_filter'])
         self._fundamental_filter_cb.setChecked(self.DEFAULTS['fundamental_filter'])
         self._downsample_cb.setChecked(self.DEFAULTS['downsample'])
         self._sensitivity_slider.setValue(self.DEFAULTS['sensitivity'])
         self._reed_spread_slider.setValue(self.DEFAULTS['reed_spread'])
+        self._esprit_width_slider.setValue(self.DEFAULTS['esprit_width'])
+        self._esprit_sep_slider.setValue(self.DEFAULTS['esprit_separation'])
+        self._esprit_offsets_combo.setCurrentIndex(self.DEFAULTS['esprit_offsets'])
         self._temperament_combo.setCurrentIndex(self.DEFAULTS['temperament'])
         self._key_combo.setCurrentIndex(self.DEFAULTS['key'])
         self._transpose_spin.setValue(self.DEFAULTS['transpose'])

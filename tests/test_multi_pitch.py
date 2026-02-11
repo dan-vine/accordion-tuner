@@ -4,6 +4,7 @@ Tests for multi-pitch detection
 
 import numpy as np
 import pytest
+
 from accordion_tuner import MultiPitchDetector
 
 

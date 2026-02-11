@@ -13,7 +13,8 @@ results to the C++ implementation without needing to compile it.
 
 import numpy as np
 import pytest
-from accordion_tuner import MultiPitchDetector, MultiPitchResult, SAMPLE_RATE, BUFFER_SIZE
+
+from accordion_tuner import BUFFER_SIZE, SAMPLE_RATE, MultiPitchDetector, MultiPitchResult
 from accordion_tuner.temperaments import Temperament
 
 

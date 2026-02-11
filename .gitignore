@@ -28,6 +28,7 @@ htmlcov/
 # IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 

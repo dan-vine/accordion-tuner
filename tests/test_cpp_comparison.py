@@ -14,13 +14,13 @@ To use:
 
 import json
 import wave
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from dataclasses import dataclass, asdict
+
 import numpy as np
 import pytest
 
-from accordion_tuner import MultiPitchDetector, SAMPLE_RATE, BUFFER_SIZE
-
+from accordion_tuner import BUFFER_SIZE, SAMPLE_RATE, MultiPitchDetector
 
 # Test data directory
 TEST_DATA_DIR = Path(__file__).parent / "test_data"

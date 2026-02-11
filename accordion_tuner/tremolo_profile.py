@@ -94,7 +94,7 @@ def load_profile(path: str) -> TremoloProfile:
     # Pattern to match note names like "C2", "F#3", "Bb4"
     note_pattern = re.compile(r'^([A-Ga-g][#b]?)(\d+)$')
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         # Try to detect delimiter
         content = f.read()
         f.seek(0)

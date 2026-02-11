@@ -7,6 +7,7 @@ intentional detuning (tremolo/musette effects).
 """
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,11 +16,18 @@ from .constants import (
     A4_REFERENCE,
     SAMPLE_RATE,
 )
+from .esprit_detector import EspritPitchDetector
 from .multi_pitch_detector import Maximum, MultiPitchDetector
 from .temperaments import Temperament
 
 if TYPE_CHECKING:
     from .tremolo_profile import TremoloProfile
+
+
+class DetectorType(Enum):
+    """Type of pitch detection algorithm."""
+    FFT = "fft"        # FFT + Phase Vocoder (default)
+    ESPRIT = "esprit"  # FFT-ESPRIT (best for close frequencies)
 
 
 @dataclass
@@ -69,6 +77,7 @@ class AccordionDetector:
         reference: float = A4_REFERENCE,
         max_reeds: int = 4,
         reed_spread_cents: float = 50.0,
+        detector_type: DetectorType = DetectorType.FFT,
     ):
         """
         Initialize accordion detector.
@@ -78,28 +87,74 @@ class AccordionDetector:
             reference: Reference frequency for A4 in Hz
             max_reeds: Maximum number of reeds to detect (2-4)
             reed_spread_cents: Maximum cents spread to consider as same note
+            detector_type: Type of pitch detection algorithm to use
         """
         self.sample_rate = sample_rate
         self.reference = reference
         self.max_reeds = min(max(1, max_reeds), 4)
         self.reed_spread_cents = reed_spread_cents
+        self._detector_type = detector_type
+
+        # Store current temperament and key for detector configuration/switching
+        # Must be initialized before _create_detector/_configure_detector
+        self._temperament = Temperament.EQUAL
+        self._key = 0
 
         # Internal multi-pitch detector with accordion-specific settings
-        self._detector = MultiPitchDetector(
-            sample_rate=sample_rate,
-            reference=reference,
-        )
-        # Disable octave filter to detect closely-spaced frequencies
-        self._detector.set_octave_filter(False)
-        # Lower threshold for typical microphone input levels
-        self._detector.set_min_magnitude(0.1)
+        self._detector = self._create_detector(detector_type)
+        self._configure_detector()
 
         # FFT state for spectrum display
         self._fft_freqs: np.ndarray | None = None
         self._fft_mags: np.ndarray | None = None
 
         # Tremolo profile for target deviation calculation
-        self._tremolo_profile: "TremoloProfile | None" = None
+        self._tremolo_profile: TremoloProfile | None = None
+
+    def _create_detector(
+        self, detector_type: DetectorType
+    ) -> MultiPitchDetector | EspritPitchDetector:
+        """Create a pitch detector of the specified type."""
+        if detector_type == DetectorType.ESPRIT:
+            return EspritPitchDetector(
+                sample_rate=self.sample_rate,
+                reference=self.reference,
+                num_sources=self.max_reeds,
+            )
+        else:
+            return MultiPitchDetector(
+                sample_rate=self.sample_rate,
+                reference=self.reference,
+            )
+
+    def _configure_detector(self):
+        """Configure the current detector with accordion-specific settings."""
+        # Disable octave filter to detect closely-spaced frequencies
+        self._detector.set_octave_filter(False)
+        # Lower threshold for typical microphone input levels
+        self._detector.set_min_magnitude(0.1)
+
+        # Apply stored temperament and key
+        self._detector.set_temperament(self._temperament)
+        self._detector.set_key(self._key)
+
+    def set_detector_type(self, detector_type: DetectorType):
+        """
+        Switch the pitch detection algorithm.
+
+        Args:
+            detector_type: Type of detector to use (FFT or ESPRIT)
+        """
+        if detector_type == self._detector_type:
+            return
+
+        self._detector_type = detector_type
+        self._detector = self._create_detector(detector_type)
+        self._configure_detector()
+
+    def get_detector_type(self) -> DetectorType:
+        """Get the current detector type."""
+        return self._detector_type
 
     def process(self, samples: np.ndarray) -> AccordionResult:
         """
@@ -323,8 +378,11 @@ class AccordionDetector:
         self._detector.set_reference(freq)
 
     def set_max_reeds(self, count: int):
-        """Set maximum number of reeds to detect."""
-        self.max_reeds = min(max(1, count), 4)
+        """Set maximum number of reeds to detect (minimum 2, maximum 4)."""
+        self.max_reeds = min(max(2, count), 4)
+        # Update ESPRIT detector's num_sources if applicable
+        if isinstance(self._detector, EspritPitchDetector):
+            self._detector.set_num_sources(self.max_reeds)
 
     def set_reed_spread(self, cents: float):
         """Set maximum cents spread to consider as same note."""
@@ -332,10 +390,12 @@ class AccordionDetector:
 
     def set_temperament(self, temperament: Temperament):
         """Set musical temperament for reference frequency calculation."""
+        self._temperament = temperament
         self._detector.set_temperament(temperament)
 
     def set_key(self, key: int):
         """Set key for temperament (0=C, 1=C#, ..., 11=B)."""
+        self._key = key
         self._detector.set_key(key)
 
     def set_octave_filter(self, enabled: bool):
@@ -375,6 +435,66 @@ class AccordionDetector:
     def set_downsample(self, enabled: bool):
         """Enable/disable downsampling for better low frequency detection."""
         self._detector.set_downsample(enabled)
+
+    # ESPRIT-specific settings (only effective when using ESPRIT detector)
+    def set_esprit_width_threshold(self, threshold: float):
+        """
+        Set ESPRIT width threshold for detecting merged peaks.
+
+        Only effective when using ESPRIT detector.
+        A single Hamming-windowed sinusoid has ~0.08 ratio at ±2 bins.
+        Higher thresholds = less sensitive to merged peaks (fewer false positives).
+        Lower thresholds = more sensitive (better close-freq detection but may hallucinate).
+
+        Args:
+            threshold: Ratio threshold (0.1 to 0.5, default 0.25)
+        """
+        if isinstance(self._detector, EspritPitchDetector):
+            self._detector.set_width_threshold(threshold)
+
+    def get_esprit_width_threshold(self) -> float:
+        """Get ESPRIT width threshold (returns 0.25 if not using ESPRIT)."""
+        if isinstance(self._detector, EspritPitchDetector):
+            return self._detector.get_width_threshold()
+        return 0.25
+
+    def set_esprit_candidate_offsets(self, offsets: list[float]):
+        """
+        Set ESPRIT frequency offsets for candidate generation.
+
+        Only effective when using ESPRIT detector.
+        When a merged peak is detected, candidates are added at these offsets
+        to help ESPRIT resolve the close frequencies.
+
+        Args:
+            offsets: List of Hz offsets (e.g., [-0.8, -0.4, 0.4, 0.8])
+        """
+        if isinstance(self._detector, EspritPitchDetector):
+            self._detector.set_candidate_offsets(offsets)
+
+    def get_esprit_candidate_offsets(self) -> list[float]:
+        """Get ESPRIT candidate offsets (returns default if not using ESPRIT)."""
+        if isinstance(self._detector, EspritPitchDetector):
+            return self._detector.get_candidate_offsets()
+        return [-0.8, -0.4, 0.4, 0.8]
+
+    def set_esprit_min_separation(self, separation: float):
+        """
+        Set ESPRIT minimum separation between detected frequencies.
+
+        Only effective when using ESPRIT detector.
+
+        Args:
+            separation: Minimum Hz between peaks (0.3 to 1.0, default 0.5)
+        """
+        if isinstance(self._detector, EspritPitchDetector):
+            self._detector.set_min_separation(separation)
+
+    def get_esprit_min_separation(self) -> float:
+        """Get ESPRIT minimum separation (returns 0.5 if not using ESPRIT)."""
+        if isinstance(self._detector, EspritPitchDetector):
+            return self._detector.get_min_separation()
+        return 0.5
 
     def reset(self):
         """Reset internal state."""

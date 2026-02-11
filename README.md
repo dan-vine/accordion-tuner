@@ -9,6 +9,8 @@ A musical instrument tuner specialized for accordion reed tuning with multi-pitc
 - Multi-reed detection (1-4 simultaneous reeds)
 - Beat frequency calculation for tremolo/musette tuning
 - Custom tremolo tuning profiles (CSV/TSV)
+- Multiple detection algorithms: FFT and ESPRIT
+- ESPRIT algorithm for super-resolution detection of close frequencies (<1 Hz apart)
 - Phase vocoder for accurate pitch detection
 - Hold mode for capturing best measurement
 - Measurement log for recording and exporting tuning data
@@ -40,11 +42,38 @@ Click the "Settings" button to expand the settings panel with four tabs.
 
 ### Detection Tab
 
+**Algorithm:**
+- **FFT (Phase Vocoder)** - Default algorithm. Fast and reliable for most tuning scenarios. Uses FFT with phase vocoder for sub-bin frequency accuracy.
+- **ESPRIT** - Best for closely-spaced frequencies (1-5 Hz tremolo reeds). Uses subspace methods to achieve super-resolution frequency estimation beyond the FFT bin width. Recommended when FFT cannot resolve your tremolo reeds.
+
+**General Settings:**
 - **Octave Filter** - When enabled, restricts detection to one octave above the fundamental. Keep OFF for accordion tuning to detect closely-spaced tremolo reeds.
 - **Fundamental Filter** - Only detect harmonics of the fundamental frequency. Useful for filtering out non-harmonic noise.
-- **Downsample** - Enables downsampling for better low frequency detection. Helpful for bass reeds.
+- **Downsample** - Enables downsampling for better low frequency detection. Helpful for bass reeds. *(FFT only)*
 - **Sensitivity** - Detection threshold (0.05-0.50). Lower values increase sensitivity but may detect more background noise.
 - **Reed Spread** - Maximum cents deviation to group as the same note (20-100¢). Increase if your tremolo reeds have wide detuning.
+
+#### ESPRIT Options
+
+When ESPRIT is selected, additional tuning options appear for fine-tuning close-frequency detection:
+
+| Parameter | Range | Default | Description |
+|-----------|-------|---------|-------------|
+| **Width Threshold** | 0.10-0.50 | 0.25 | Threshold for detecting merged peaks. Lower values are more sensitive to close frequencies but may produce false detections. |
+| **Min Separation** | 0.30-1.00 Hz | 0.50 Hz | Minimum frequency separation between detected reeds. Lower values allow resolving closer frequencies. |
+| **Candidate Offsets** | Presets | ±0.4, ±0.8 Hz | Frequency offsets added around merged peaks to help ESPRIT resolve close frequencies. |
+
+**Candidate Offset Presets:**
+- **±0.4, ±0.8 Hz (default)** - Good for typical tremolo (1-3 Hz beat)
+- **±0.3, ±0.6 Hz (tighter)** - For very close frequencies (<1 Hz)
+- **±0.5, ±1.0 Hz (wider)** - For wider tremolo (3-5 Hz beat)
+- **±0.4, ±0.8, ±1.2 Hz (extended)** - Maximum range for variable tremolo
+- **None (disable)** - Disable merged peak detection entirely
+
+**Troubleshooting ESPRIT:**
+- If close frequencies aren't detected: Lower Width Threshold (try 0.15-0.20) and/or lower Min Separation (try 0.35-0.40)
+- If you get false/spurious frequencies: Raise Width Threshold (try 0.30-0.40) and/or raise Min Separation
+- The theoretical resolution limit is approximately 0.6 Hz (frequencies closer than this cannot be reliably resolved)
 
 ### Tuning Tab
 

@@ -5,14 +5,13 @@ Tests comparing multi-pitch detection between Python and C++ implementations
 import json
 import subprocess
 import wave
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from accordion_tuner import MultiPitchDetector
-
 
 TEST_DATA_DIR = Path(__file__).parent / "test_data"
 CLI_PATH = Path(__file__).parent.parent.parent / "cli" / "tuner_cli"

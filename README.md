@@ -111,7 +111,7 @@ When a profile is loaded, the cents display shows how far each reed is from its 
 4. Play a note - the display now shows deviation from target
 5. Select "None" to return to standard cents display
 
-A sample profile is included at `examples/tremolo_profile_sample.csv`.
+A sample profile is included at `examples/tremolo_ora_13_cents.csv`.
 
 ## Acknowledgments
 

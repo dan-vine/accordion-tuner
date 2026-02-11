@@ -17,6 +17,7 @@ from .constants import (
     SAMPLE_RATE,
 )
 from .esprit_detector import EspritPitchDetector
+from .measurement_smoother import MeasurementSmoother
 from .multi_pitch_detector import Maximum, MultiPitchDetector
 from .temperaments import Temperament
 
@@ -37,6 +38,8 @@ class ReedInfo:
     cents: float = 0.0          # Deviation from reference in cents
     magnitude: float = 0.0      # Signal strength (for confidence)
     target_cents: float | None = None  # Deviation from target (when profile active)
+    stability: float = 0.0      # Measurement stability (0.0-1.0, higher = more stable)
+    sample_count: int = 0       # Number of samples in the smoothed average
 
 
 @dataclass
@@ -111,6 +114,13 @@ class AccordionDetector:
         # Tremolo profile for target deviation calculation
         self._tremolo_profile: TremoloProfile | None = None
 
+        # Temporal smoothing for stable measurements
+        self._smoother = MeasurementSmoother(
+            max_samples=20,  # ~2 seconds at 10 Hz update rate
+            max_reeds=self.max_reeds,
+        )
+        self._smoothing_enabled = True
+
     def _create_detector(
         self, detector_type: DetectorType
     ) -> MultiPitchDetector | EspritPitchDetector:
@@ -177,6 +187,7 @@ class AccordionDetector:
         self._compute_spectrum(samples)
 
         if not multi_result.valid or not multi_result.maxima:
+            self._smoother.set_inactive()
             return AccordionResult(spectrum_data=self._get_spectrum_tuple())
 
         # Primary note from the first (strongest) detection
@@ -191,7 +202,17 @@ class AccordionDetector:
         )
 
         if not reeds:
+            self._smoother.set_inactive()
             return AccordionResult(spectrum_data=self._get_spectrum_tuple())
+
+        # Apply temporal smoothing if enabled
+        if self._smoothing_enabled:
+            reeds = self._apply_smoothing(
+                primary.note_name,
+                primary.octave,
+                primary.ref_frequency,
+                reeds,
+            )
 
         # Calculate beat frequencies between adjacent reeds
         beat_freqs = []
@@ -208,6 +229,61 @@ class AccordionDetector:
             beat_frequencies=beat_freqs,
             spectrum_data=self._get_spectrum_tuple(),
         )
+
+    def _apply_smoothing(
+        self,
+        note_name: str,
+        octave: int,
+        ref_frequency: float,
+        reeds: list[ReedInfo],
+    ) -> list[ReedInfo]:
+        """
+        Apply temporal smoothing to reed measurements.
+
+        Args:
+            note_name: Detected note name
+            octave: Detected octave
+            ref_frequency: Reference frequency for the note
+            reeds: Raw reed measurements
+
+        Returns:
+            Smoothed reed measurements
+        """
+        # Prepare measurements for smoother
+        measurements = [
+            (r.frequency, r.cents, r.magnitude) for r in reeds
+        ]
+
+        # Update smoother and get smoothed results
+        smoothed_results = self._smoother.update(note_name, octave, measurements)
+
+        # Build smoothed ReedInfo list
+        smoothed_reeds = []
+        for i, reed in enumerate(reeds):
+            smoothed = smoothed_results[i] if i < len(smoothed_results) else None
+
+            if smoothed is not None:
+                # Use smoothed values
+                smoothed_reed = ReedInfo(
+                    frequency=smoothed.frequency,
+                    cents=smoothed.cents,
+                    magnitude=smoothed.magnitude,
+                    target_cents=reed.target_cents,  # Keep original target_cents for now
+                    stability=smoothed.stability,
+                    sample_count=smoothed.sample_count,
+                )
+                smoothed_reeds.append(smoothed_reed)
+            else:
+                # No smoothed data yet, use raw
+                smoothed_reeds.append(reed)
+
+        # Recompute target_cents for smoothed frequencies if profile active
+        if self._tremolo_profile is not None and smoothed_reeds:
+            beat_freq = self._tremolo_profile.get_beat_frequency(note_name, octave)
+            if beat_freq is not None:
+                self._compute_target_cents(smoothed_reeds, ref_frequency, beat_freq)
+
+        return smoothed_reeds
 
     def _group_reeds(
         self,
@@ -501,3 +577,48 @@ class AccordionDetector:
         self._detector.reset()
         self._fft_freqs = None
         self._fft_mags = None
+        self._smoother.reset()
+
+    # Smoothing settings
+    def set_smoothing_enabled(self, enabled: bool):
+        """
+        Enable or disable temporal smoothing.
+
+        When enabled, measurements are averaged over time for stability.
+        When disabled, raw instantaneous measurements are returned.
+
+        Args:
+            enabled: True to enable smoothing
+        """
+        self._smoothing_enabled = enabled
+        if not enabled:
+            self._smoother.reset()
+
+    def is_smoothing_enabled(self) -> bool:
+        """Check if smoothing is enabled."""
+        return self._smoothing_enabled
+
+    def set_smoothing_window(self, samples: int):
+        """
+        Set the smoothing window size.
+
+        Larger windows provide more stable readings but respond slower to changes.
+        At typical 10 Hz update rate:
+        - 5 samples = 0.5 seconds
+        - 10 samples = 1 second
+        - 20 samples = 2 seconds (default)
+        - 30 samples = 3 seconds
+
+        Args:
+            samples: Number of measurements to average (5-50)
+        """
+        samples = max(5, min(50, samples))
+        self._smoother.set_max_samples(samples)
+
+    def get_smoothing_window(self) -> int:
+        """Get current smoothing window size."""
+        return self._smoother.max_samples
+
+    def reset_smoothing(self):
+        """Reset the smoother, clearing accumulated measurements."""
+        self._smoother.reset()

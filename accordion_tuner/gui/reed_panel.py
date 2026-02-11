@@ -3,7 +3,7 @@ Reed panel widget - complete panel for one reed.
 """
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QLabel, QProgressBar, QVBoxLayout
 
 from .styles import (
     ACCENT_GREEN,
@@ -64,6 +64,16 @@ class ReedPanel(QFrame):
         self._beat_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._beat_label)
 
+        # Stability indicator bar
+        self._stability_bar = QProgressBar()
+        self._stability_bar.setObjectName("stabilityBar")
+        self._stability_bar.setRange(0, 100)
+        self._stability_bar.setValue(0)
+        self._stability_bar.setTextVisible(False)
+        self._stability_bar.setMaximumHeight(6)
+        self._stability_bar.setToolTip("Measurement stability (fills as reading stabilizes)")
+        layout.addWidget(self._stability_bar)
+
         layout.addStretch()
 
     def _apply_style(self):
@@ -91,6 +101,15 @@ class ReedPanel(QFrame):
                 font-size: 12px;
                 color: {TEXT_SECONDARY};
             }}
+            QProgressBar#stabilityBar {{
+                background-color: #3a3a3a;
+                border: none;
+                border-radius: 3px;
+            }}
+            QProgressBar#stabilityBar::chunk {{
+                background-color: {ACCENT_GREEN};
+                border-radius: 3px;
+            }}
         """)
         self.setMinimumWidth(160)
         self.setMinimumHeight(180)
@@ -101,6 +120,8 @@ class ReedPanel(QFrame):
         cents: float,
         beat_frequency: float = None,
         target_cents: float | None = None,
+        stability: float = 0.0,
+        sample_count: int = 0,
     ):
         """
         Set reed data.
@@ -110,6 +131,8 @@ class ReedPanel(QFrame):
             cents: Deviation from reference in cents
             beat_frequency: Beat frequency with next reed (optional)
             target_cents: Deviation from target when tremolo profile is active (optional)
+            stability: Measurement stability (0.0-1.0)
+            sample_count: Number of samples in the smoothed average
         """
         # Update frequency
         self._freq_label.setText(f"{frequency:.2f} Hz")
@@ -128,12 +151,20 @@ class ReedPanel(QFrame):
         else:
             self._beat_label.setText("")
 
+        # Update stability bar
+        # Combine stability score with sample count for a "settling" indicator
+        # Need at least 5 samples for meaningful stability, max out at 20
+        sample_factor = min(1.0, sample_count / 10.0)  # Ramps up over first 10 samples
+        combined_stability = stability * sample_factor
+        self._stability_bar.setValue(int(combined_stability * 100))
+
     def set_inactive(self):
         """Set panel to inactive state."""
         self._cents_label.setText("--")
         self._cents_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
         self._freq_label.setText("-- Hz")
         self._beat_label.setText("")
+        self._stability_bar.setValue(0)
 
     def _get_cents_color(self, cents: float) -> str:
         """Get color based on cents deviation."""

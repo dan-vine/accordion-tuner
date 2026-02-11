@@ -77,6 +77,9 @@ class AccordionWindow(QMainWindow):
         'esprit_width': 25,  # 0.25
         'esprit_separation': 50,  # 0.50 Hz
         'esprit_offsets': 0,  # Default offsets preset
+        # Smoothing settings
+        'smoothing_enabled': True,
+        'smoothing_window': 20,  # samples (~2 seconds at 10 Hz)
     }
 
     def __init__(self):
@@ -366,6 +369,41 @@ class AccordionWindow(QMainWindow):
 
         sliders_row.addStretch()
         detection_layout.addLayout(sliders_row)
+
+        # Smoothing row
+        smoothing_row = QHBoxLayout()
+        smoothing_row.setSpacing(20)
+
+        self._smoothing_cb = QCheckBox("Temporal Smoothing")
+        self._smoothing_cb.setToolTip(
+            "Average measurements over time for more stable readings.\n"
+            "Disable for fastest response to changes."
+        )
+        self._smoothing_cb.setChecked(True)
+        self._smoothing_cb.stateChanged.connect(self._on_smoothing_changed)
+        smoothing_row.addWidget(self._smoothing_cb)
+
+        # Smoothing window slider
+        window_layout = QHBoxLayout()
+        window_layout.addWidget(QLabel("Window:"))
+        self._smoothing_slider = QSlider(Qt.Orientation.Horizontal)
+        self._smoothing_slider.setRange(5, 40)  # 0.5 to 4 seconds at ~10 Hz
+        self._smoothing_slider.setValue(20)  # 2 seconds default
+        self._smoothing_slider.setMinimumWidth(100)
+        self._smoothing_slider.setToolTip(
+            "Smoothing window size (number of samples to average).\n"
+            "Larger = more stable but slower to respond.\n"
+            "5 = 0.5s, 10 = 1s, 20 = 2s, 40 = 4s"
+        )
+        self._smoothing_slider.valueChanged.connect(self._on_smoothing_window_changed)
+        window_layout.addWidget(self._smoothing_slider)
+        self._smoothing_value = QLabel("2.0s")
+        self._smoothing_value.setFixedWidth(35)
+        window_layout.addWidget(self._smoothing_value)
+        smoothing_row.addLayout(window_layout)
+
+        smoothing_row.addStretch()
+        detection_layout.addLayout(smoothing_row)
 
         # ESPRIT-specific options (visible only when ESPRIT selected)
         self._esprit_frame = QFrame()
@@ -695,6 +733,19 @@ class AccordionWindow(QMainWindow):
         self._detector.set_reed_spread(float(value))
         self._reed_spread_value.setText(f"{value}¢")
 
+    def _on_smoothing_changed(self, state):
+        """Handle smoothing checkbox change."""
+        enabled = self._smoothing_cb.isChecked()
+        self._detector.set_smoothing_enabled(enabled)
+        self._smoothing_slider.setEnabled(enabled)
+
+    def _on_smoothing_window_changed(self, value: int):
+        """Handle smoothing window slider change."""
+        self._detector.set_smoothing_window(value)
+        # Display as approximate time (assuming ~10 Hz update rate)
+        time_seconds = value / 10.0
+        self._smoothing_value.setText(f"{time_seconds:.1f}s")
+
     def _on_temperament_changed(self, index: int):
         """Handle temperament combo change."""
         self._detector.set_temperament(Temperament(index))
@@ -1011,7 +1062,14 @@ class AccordionWindow(QMainWindow):
                     elif i == num_reeds - 1 and len(result.beat_frequencies) > i - 1:
                         beat_freq = result.beat_frequencies[-1]
 
-                panel.set_data(reed.frequency, reed.cents, beat_freq, reed.target_cents)
+                panel.set_data(
+                    reed.frequency,
+                    reed.cents,
+                    beat_freq,
+                    reed.target_cents,
+                    reed.stability,
+                    reed.sample_count,
+                )
                 # Update unified meter with this reed's cents (or target_cents if available)
                 display_cents = reed.target_cents if reed.target_cents is not None else reed.cents
                 self._multi_meter.set_reed_data(i, display_cents)
@@ -1092,6 +1150,14 @@ class AccordionWindow(QMainWindow):
         if algorithm == 1:
             self._esprit_frame.setVisible(True)
 
+        # Smoothing settings
+        smoothing_enabled = settings.value("smoothing_enabled", self.DEFAULTS['smoothing_enabled'], type=bool)
+        self._smoothing_cb.setChecked(smoothing_enabled)
+        self._smoothing_slider.setEnabled(smoothing_enabled)
+
+        smoothing_window = settings.value("smoothing_window", self.DEFAULTS['smoothing_window'], type=int)
+        self._smoothing_slider.setValue(smoothing_window)
+
         # Tuning settings
         temperament = settings.value("temperament", self.DEFAULTS['temperament'], type=int)
         self._temperament_combo.setCurrentIndex(temperament)
@@ -1161,6 +1227,10 @@ class AccordionWindow(QMainWindow):
         settings.setValue("esprit_separation", self._esprit_sep_slider.value())
         settings.setValue("esprit_offsets", self._esprit_offsets_combo.currentIndex())
 
+        # Smoothing settings
+        settings.setValue("smoothing_enabled", self._smoothing_cb.isChecked())
+        settings.setValue("smoothing_window", self._smoothing_slider.value())
+
         # Tuning settings
         settings.setValue("temperament", self._temperament_combo.currentIndex())
         settings.setValue("key", self._key_combo.currentIndex())
@@ -1211,6 +1281,8 @@ class AccordionWindow(QMainWindow):
         self._esprit_width_slider.setValue(self.DEFAULTS['esprit_width'])
         self._esprit_sep_slider.setValue(self.DEFAULTS['esprit_separation'])
         self._esprit_offsets_combo.setCurrentIndex(self.DEFAULTS['esprit_offsets'])
+        self._smoothing_cb.setChecked(self.DEFAULTS['smoothing_enabled'])
+        self._smoothing_slider.setValue(self.DEFAULTS['smoothing_window'])
         self._temperament_combo.setCurrentIndex(self.DEFAULTS['temperament'])
         self._key_combo.setCurrentIndex(self.DEFAULTS['key'])
         self._transpose_spin.setValue(self.DEFAULTS['transpose'])

@@ -1,8 +1,8 @@
 """
-Multi-pitch detection using FFT + phase vocoder (matching C++ implementation)
+Multi-pitch detection using FFT + phase vocoder.
 
 This module provides multi-note detection by analyzing the FFT spectrum
-and finding multiple peaks, similar to the C++ implementation.
+and finding multiple peaks. Algorithm based on billthefarmer/ctuner.
 """
 
 from dataclasses import dataclass, field
@@ -19,7 +19,7 @@ from .constants import (
 )
 from .temperaments import TEMPERAMENT_RATIOS, Temperament
 
-# Constants matching C++ implementation
+# Detection constants
 K_SAMPLES = 16384  # FFT size
 K_LOG2_SAMPLES = 14
 K_SAMPLES2 = K_SAMPLES // 2
@@ -66,11 +66,10 @@ class MultiPitchResult:
 
 
 class MultiPitchDetector:
-    """
+"""
     Multi-pitch detector using FFT + phase vocoder.
 
-    This implementation matches the C++ algorithm for detecting
-    multiple simultaneous notes in the spectrum.
+    Detects multiple simultaneous notes in the spectrum.
     """
 
     def __init__(
@@ -102,7 +101,7 @@ class MultiPitchDetector:
         # Filters
         self.fundamental_filter = False  # Only detect harmonics of fundamental
         self.downsample = False  # Downsample spectrum for low notes
-        self.octave_filter = True  # Limit search to one octave above fundamental (C++ behavior)
+        self.octave_filter = True  # Limit search to one octave above fundamental
 
         # Detection threshold (can be lowered for quiet inputs)
         self.min_magnitude = K_MIN
@@ -247,9 +246,7 @@ class MultiPitchDetector:
             )
             maxima.append(maximum)
 
-            # Limit search to avoid harmonics (one octave above fundamental)
-            # When octave_filter is True (default), matches C++ behavior
-            # When False, allows detecting notes across multiple octaves (e.g., octave pairs)
+            # Limit search to one octave above fundamental to avoid harmonics
             if self.octave_filter and not self.downsample and limit > i * 2:
                 limit = i * 2 - 1
 
@@ -313,8 +310,8 @@ class MultiPitchDetector:
     def set_octave_filter(self, enabled: bool):
         """Enable/disable octave filter.
 
-        When enabled (default, C++ behavior): limits search to one octave above
-        the fundamental frequency, preventing detection of octave pairs and harmonics.
+        When enabled (default): limits search to one octave above the fundamental
+        frequency, preventing detection of octave pairs and harmonics.
 
         When disabled: allows detecting notes across multiple octaves, useful for
         detecting octave pairs like A3+A4.
@@ -325,7 +322,7 @@ class MultiPitchDetector:
         """Set minimum magnitude threshold for peak detection.
 
         Lower values increase sensitivity but may detect more noise.
-        Default is 0.5 (matching C++ implementation).
+        Default is 0.5.
         For quiet microphone input, try 0.1 or lower.
         """
         self.min_magnitude = max(0.01, threshold)

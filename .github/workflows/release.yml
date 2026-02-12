@@ -37,7 +37,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.ico accordion_tuner/gui/accordion_window.py
+          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.ico run_gui.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -81,7 +81,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.icns accordion_tuner/gui/accordion_window.py
+          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.icns run_gui.py
 
       - name: Create DMG
         run: |

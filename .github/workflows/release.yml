@@ -1,0 +1,129 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pillow
+          pip install -e .
+
+      - name: Convert PNG to ICO
+        run: |
+          python -c "
+          from PIL import Image
+          img = Image.open('assets/icon.png')
+          img.save('assets/icon.ico', format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
+          "
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.ico accordion_tuner/gui/accordion_window.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: accordion-tuner-windows
+          path: dist/accordion-tuner.exe
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e .
+          brew install create-dmg
+
+      - name: Convert PNG to ICNS
+        run: |
+          mkdir -p assets/icon.iconset
+          sips -z 16 16     assets/icon.png --out assets/icon.iconset/icon_16x16.png
+          sips -z 32 32     assets/icon.png --out assets/icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     assets/icon.png --out assets/icon.iconset/icon_32x32.png
+          sips -z 64 64     assets/icon.png --out assets/icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   assets/icon.png --out assets/icon.iconset/icon_128x128.png
+          sips -z 256 256   assets/icon.png --out assets/icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   assets/icon.png --out assets/icon.iconset/icon_256x256.png
+          sips -z 512 512   assets/icon.png --out assets/icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   assets/icon.png --out assets/icon.iconset/icon_512x512.png
+          sips -z 1024 1024 assets/icon.png --out assets/icon.iconset/icon_512x512@2x.png
+          iconutil -c icns assets/icon.iconset -o assets/icon.icns
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.icns accordion_tuner/gui/accordion_window.py
+
+      - name: Create DMG
+        run: |
+          create-dmg \
+            --volname "Accordion Tuner" \
+            --volicon "assets/icon.icns" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "accordion-tuner.app" 150 185 \
+            --hide-extension "accordion-tuner.app" \
+            --app-drop-link 450 185 \
+            "Accordion-Tuner.dmg" \
+            "dist/accordion-tuner.app"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: accordion-tuner-macos
+          path: Accordion-Tuner.dmg
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: accordion-tuner-windows
+          path: windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: accordion-tuner-macos
+          path: macos
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            windows/accordion-tuner.exe
+            macos/Accordion-Tuner.dmg
+          generate_release_notes: true

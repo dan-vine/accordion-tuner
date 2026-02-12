@@ -37,7 +37,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onedir --windowed --name accordion-tuner --icon=assets/icon.ico run_gui.py
+          pyinstaller --onedir --windowed --name accordion-tuner --icon=assets/icon.ico --add-data "assets/icon.png;assets" run_gui.py
 
       - name: Create zip
         run: |
@@ -85,7 +85,11 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onedir --windowed --name accordion-tuner --icon=assets/icon.icns run_gui.py
+          pyinstaller --onedir --windowed --name accordion-tuner --icon=assets/icon.icns --add-data "assets/icon.png:assets" run_gui.py
+
+      - name: Add microphone permission to Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'Accordion Tuner needs microphone access to detect reed frequencies.'" "dist/accordion-tuner.app/Contents/Info.plist"
 
       - name: Ad-hoc code sign
         run: |
@@ -140,4 +144,4 @@ jobs:
 
             **Windows**: Download and extract `accordion-tuner-windows.zip`, then run `accordion-tuner.exe` from the folder. Windows SmartScreen may show a warning - click "More info" → "Run anyway".
 
-            **macOS**: Download `Accordion-Tuner.dmg`, open it, and drag to Applications. On first launch, right-click the app → "Open" → click "Open" to bypass Gatekeeper.
+            **macOS**: Download `Accordion-Tuner.dmg`, open it, and drag to Applications. On first launch, right-click the app → "Open" → click "Open" to bypass Gatekeeper. Grant microphone access when prompted (or via System Settings → Privacy & Security → Microphone).

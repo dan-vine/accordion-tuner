@@ -2,11 +2,13 @@
 Main application window for accordion reed tuning.
 """
 
+import os
 import sys
 
 import numpy as np
 import sounddevice as sd
 from PySide6.QtCore import QSettings, Qt, QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -1444,6 +1446,17 @@ def main():
     """Main entry point for the accordion tuner GUI."""
     app = QApplication(sys.argv)
     app.setStyle("Fusion")  # Use Fusion style for consistent cross-platform look
+
+    # Set application icon (handles both dev and PyInstaller bundled paths)
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        base_path = sys._MEIPASS
+    else:
+        # Running in development
+        base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    icon_path = os.path.join(base_path, 'assets', 'icon.png')
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
 
     window = AccordionWindow()
     window.show()

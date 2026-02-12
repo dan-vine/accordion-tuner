@@ -2,7 +2,16 @@
 
 A musical instrument tuner specialized for accordion reed tuning with multi-pitch detection, temperament support, and beat frequency measurement.
 
+[![Latest Release](https://img.shields.io/github/v/release/dan-vine/accordion-tuner)](https://github.com/dan-vine/accordion-tuner/releases/latest)
+
 ![Accordion Tuner Screenshot](images/screenshot.png)
+
+## Download
+
+**[Download the latest release](https://github.com/dan-vine/accordion-tuner/releases/latest)**
+
+- **Windows**: Download `accordion-tuner-windows.zip`, extract, and run `accordion-tuner.exe`
+- **macOS**: Download `Accordion-Tuner.dmg`, drag to Applications (see [macOS installation notes](https://github.com/dan-vine/accordion-tuner/releases/latest))
 
 ## Features
 

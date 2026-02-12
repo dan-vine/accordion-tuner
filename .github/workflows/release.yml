@@ -142,6 +142,18 @@ jobs:
           body: |
             ## Installation
 
-            **Windows**: Download and extract `accordion-tuner-windows.zip`, then run `accordion-tuner.exe` from the folder. Windows SmartScreen may show a warning - click "More info" → "Run anyway".
+            ### Windows
+            1. Download and extract `accordion-tuner-windows.zip`
+            2. Run `accordion-tuner.exe` from the extracted folder
+            3. If SmartScreen shows a warning, click "More info" → "Run anyway"
 
-            **macOS**: Download `Accordion-Tuner.dmg`, open it, and drag to Applications. On first launch, right-click the app → "Open" → click "Open" to bypass Gatekeeper. Grant microphone access when prompted (or via System Settings → Privacy & Security → Microphone).
+            ### macOS
+            1. Download `Accordion-Tuner.dmg` and open it
+            2. Drag the app to Applications
+            3. **First launch** (Gatekeeper will block unsigned apps):
+               - Try to open the app (it will be blocked)
+               - Go to **System Settings → Privacy & Security**
+               - Scroll down to find the message about "accordion-tuner"
+               - Click **"Open Anyway"**
+               - Alternative: run `xattr -cr /Applications/accordion-tuner.app` in Terminal
+            4. Grant microphone access when prompted (required for tuning)

@@ -37,13 +37,17 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.ico run_gui.py
+          pyinstaller --onedir --windowed --name accordion-tuner --icon=assets/icon.ico run_gui.py
+
+      - name: Create zip
+        run: |
+          Compress-Archive -Path dist/accordion-tuner -DestinationPath accordion-tuner-windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: accordion-tuner-windows
-          path: dist/accordion-tuner.exe
+          path: accordion-tuner-windows.zip
 
   build-macos:
     runs-on: macos-latest
@@ -81,7 +85,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.icns run_gui.py
+          pyinstaller --onedir --windowed --name accordion-tuner --icon=assets/icon.icns run_gui.py
 
       - name: Ad-hoc code sign
         run: |
@@ -128,12 +132,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            windows/accordion-tuner.exe
+            windows/accordion-tuner-windows.zip
             macos/Accordion-Tuner.dmg
           generate_release_notes: true
           body: |
             ## Installation
 
-            **Windows**: Download `accordion-tuner.exe`. Windows SmartScreen may show a warning - click "More info" → "Run anyway".
+            **Windows**: Download and extract `accordion-tuner-windows.zip`, then run `accordion-tuner.exe` from the folder. Windows SmartScreen may show a warning - click "More info" → "Run anyway".
 
             **macOS**: Download `Accordion-Tuner.dmg`, open it, and drag to Applications. On first launch, right-click the app → "Open" → click "Open" to bypass Gatekeeper.

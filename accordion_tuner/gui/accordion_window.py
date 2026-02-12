@@ -31,6 +31,7 @@ from ..accordion import AccordionDetector, AccordionResult, DetectorType
 from ..constants import A4_REFERENCE, NOTE_NAMES, SAMPLE_RATE
 from ..temperaments import Temperament
 from ..tremolo_profile import TremoloProfile, load_profile
+from .level_meter import LevelMeter
 from .measurement_log import MeasurementLogWindow
 from .note_display import NoteDisplay
 from .reed_panel import ReedPanel
@@ -109,6 +110,10 @@ class AccordionWindow(QMainWindow):
         self._audio_buffer = np.zeros(self._buffer_size, dtype=np.float32)
         self._input_device = None  # None = default device
 
+        # Audio level metering
+        self._audio_rms = 0.0
+        self._audio_peak = 0.0
+
         # Display settings
         self._lock_display = False
         self._zoom_spectrum = True
@@ -160,11 +165,21 @@ class AccordionWindow(QMainWindow):
         main_layout.setContentsMargins(15, 15, 15, 15)
         main_layout.setSpacing(15)
 
-        # Spectrum view (top)
+        # Spectrum view with level meter (top)
+        spectrum_container = QHBoxLayout()
+        spectrum_container.setSpacing(8)
+
+        # Level meter (left of spectrum)
+        self._level_meter = LevelMeter()
+        spectrum_container.addWidget(self._level_meter)
+
+        # Spectrum view
         self._spectrum_view = SpectrumView()
         self._spectrum_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._spectrum_view.setMinimumHeight(150)
-        main_layout.addWidget(self._spectrum_view)
+        spectrum_container.addWidget(self._spectrum_view)
+
+        main_layout.addLayout(spectrum_container)
 
         # Note display (center)
         note_container = QHBoxLayout()
@@ -985,11 +1000,19 @@ class AccordionWindow(QMainWindow):
 
         self._audio_buffer = audio
 
+        # Calculate audio levels for meter (on pre-gain signal for accurate metering)
+        raw_audio = indata[:, 0]
+        self._audio_rms = float(np.sqrt(np.mean(raw_audio ** 2)))
+        self._audio_peak = float(np.max(np.abs(raw_audio)))
+
         # Process with detector
         self._last_result = self._detector.process(self._audio_buffer)
 
     def _update_display(self):
         """Update the display with the latest detection result."""
+        # Update level meter (always, even when display locked)
+        self._level_meter.set_level(self._audio_rms, self._audio_peak)
+
         # Skip update if display is locked
         if self._lock_display:
             return

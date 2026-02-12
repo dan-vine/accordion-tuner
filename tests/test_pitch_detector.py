@@ -251,7 +251,7 @@ class TestEdgeCases:
     def test_noise(self):
         """Test that pure noise returns invalid result."""
         signal = np.random.randn(BUFFER_SIZE).astype(np.float32) * 0.1
-        result = self.detector.process(signal)
+        self.detector.process(signal)
 
         # Noise should generally not produce a valid pitch
         # (might occasionally find spurious peaks)
@@ -261,7 +261,7 @@ class TestEdgeCases:
         """Test handling of buffer shorter than expected."""
         signal = generate_sine_wave(440.0, BUFFER_SIZE // 2)
         # Should not crash
-        result = self.detector.process(signal)
+        self.detector.process(signal)
         # May or may not be valid, but should not raise
 
 

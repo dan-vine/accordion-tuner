@@ -566,11 +566,12 @@ class EspritPitchDetector:
         A single Hamming-windowed sinusoid has ~0.08 ratio at ±2 bins.
         Higher thresholds = less sensitive to merged peaks (fewer false positives).
         Lower thresholds = more sensitive (better close-freq detection but may hallucinate).
+        Values below 0.08 may trigger merged peak detection on single frequencies.
 
         Args:
-            threshold: Ratio threshold (0.1 to 0.5, default 0.25)
+            threshold: Ratio threshold (0.05 to 0.5, default 0.25)
         """
-        self._width_threshold = max(0.1, min(0.5, threshold))
+        self._width_threshold = max(0.05, min(0.5, threshold))
 
     def get_width_threshold(self) -> float:
         """Get current width threshold."""

@@ -96,7 +96,7 @@ ESPRIT detects merged peaks by checking if the "shoulders" of a peak are higher 
 
 | Parameter | Range | Default | Description |
 |-----------|-------|---------|-------------|
-| **Width Threshold** | 0.10-0.50 | 0.25 | Threshold for detecting merged peaks. Lower values are more sensitive to close frequencies but may produce false detections. |
+| **Width Threshold** | 0.05-0.50 | 0.25 | Threshold for detecting merged peaks. Lower values are more sensitive to close frequencies but may produce false detections. Values below 0.08 may trigger on single frequencies. |
 | **Min Separation** | 0.30-1.00 Hz | 0.50 Hz | Minimum frequency separation between detected reeds. Lower values allow resolving closer frequencies. |
 | **Candidate Offsets** | Presets | ±0.4, ±0.8 Hz | Frequency offsets added around merged peaks to help ESPRIT resolve close frequencies. |
 

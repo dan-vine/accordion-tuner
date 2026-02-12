@@ -518,7 +518,7 @@ class AccordionWindow(QMainWindow):
         width_layout = QHBoxLayout()
         width_layout.addWidget(QLabel("Width Threshold:"))
         self._esprit_width_slider = QSlider(Qt.Orientation.Horizontal)
-        self._esprit_width_slider.setRange(10, 50)  # 0.10 to 0.50
+        self._esprit_width_slider.setRange(5, 50)  # 0.05 to 0.50
         self._esprit_width_slider.setValue(25)  # 0.25 default
         self._esprit_width_slider.setMinimumWidth(80)
         self._esprit_width_slider.setToolTip(

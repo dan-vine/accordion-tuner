@@ -1,12 +1,11 @@
 """Tests for the measurement smoother module."""
 
-import pytest
 import numpy as np
+import pytest
 
 from accordion_tuner.measurement_smoother import (
     MeasurementSmoother,
     ReedSmoother,
-    SmoothedReed,
 )
 
 
@@ -224,7 +223,7 @@ class TestSmootherIntegration:
 
         # Simulate tremolo pair: 440 Hz and 442 Hz with some jitter
         np.random.seed(42)
-        for i in range(20):
+        for _i in range(20):
             f1 = 440.0 + np.random.normal(0, 0.1)
             f2 = 442.0 + np.random.normal(0, 0.1)
             c1 = (f1 - 440.0) / 440.0 * 1200  # Approximate cents
@@ -246,7 +245,7 @@ class TestSmootherIntegration:
         smoother = MeasurementSmoother(max_samples=20, max_reeds=4)
 
         stabilities = []
-        for i in range(15):
+        for _i in range(15):
             measurements = [(440.0, 0.0, 1.0)]
             results = smoother.update("A", 4, measurements)
             if results[0]:

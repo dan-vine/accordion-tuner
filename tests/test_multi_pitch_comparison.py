@@ -142,7 +142,7 @@ def run_python_detector(filename: Path) -> dict:
         "notes": []
     }
 
-    for key, data in sorted(all_notes.items(), key=lambda x: (x[1]['octave'], x[1]['note_name'])):
+    for _key, data in sorted(all_notes.items(), key=lambda x: (x[1]['octave'], x[1]['note_name'])):
         output["notes"].append({
             "note_name": data['note_name'],
             "octave": data['octave'],

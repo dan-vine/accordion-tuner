@@ -613,7 +613,7 @@ class AccordionDetector:
             best_peak = None
             best_dist = float('inf')
 
-            for i, (peak_freq, peak_mag) in enumerate(all_peaks):
+            for i, (peak_freq, _peak_mag) in enumerate(all_peaks):
                 if i in used_peaks:
                     continue
                 dist = abs(peak_freq - target_freq)

@@ -83,6 +83,10 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name accordion-tuner --icon=assets/icon.icns run_gui.py
 
+      - name: Ad-hoc code sign
+        run: |
+          codesign --force --deep -s - "dist/accordion-tuner.app"
+
       - name: Create DMG
         run: |
           create-dmg \
@@ -127,3 +131,9 @@ jobs:
             windows/accordion-tuner.exe
             macos/Accordion-Tuner.dmg
           generate_release_notes: true
+          body: |
+            ## Installation
+
+            **Windows**: Download `accordion-tuner.exe`. Windows SmartScreen may show a warning - click "More info" → "Run anyway".
+
+            **macOS**: Download `Accordion-Tuner.dmg`, open it, and drag to Applications. On first launch, right-click the app → "Open" → click "Open" to bypass Gatekeeper.

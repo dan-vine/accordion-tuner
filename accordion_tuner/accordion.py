@@ -720,9 +720,20 @@ class AccordionDetector:
         """Set detection sensitivity (min_magnitude threshold).
 
         Lower values increase sensitivity but may detect more noise.
-        Range: 0.05 - 0.5, default 0.1
+        Range: 0.01 - 0.5, default 0.1
         """
-        self._detector.set_min_magnitude(max(0.05, min(0.5, threshold)))
+        self._detector.set_min_magnitude(max(0.01, min(0.5, threshold)))
+
+    def set_peak_threshold(self, threshold: float):
+        """Set relative peak threshold for detection.
+
+        Peaks must be at least this fraction of the maximum peak to be detected.
+        Lower values detect weaker peaks (useful for quiet reeds) but may pick
+        up noise or harmonics.
+
+        Range: 0.05 - 0.50, default 0.25 (FFT) or 0.10 (ESPRIT)
+        """
+        self._detector.set_peak_threshold(max(0.05, min(0.50, threshold)))
 
     def set_fundamental_filter(self, enabled: bool):
         """Enable/disable fundamental filter (only detect harmonics)."""

@@ -158,6 +158,10 @@ class MultiPitchDetector:
         # Detection threshold (can be lowered for quiet inputs)
         self.min_magnitude = K_MIN
 
+        # Peak threshold: peaks must be at least this fraction of the maximum
+        # Lower values detect weaker peaks but may pick up noise/harmonics
+        self.peak_threshold = 0.25  # 25% of max by default
+
     def process(self, samples: np.ndarray) -> MultiPitchResult:
         """
         Process audio samples and detect multiple pitches.
@@ -275,8 +279,8 @@ class MultiPitchDetector:
             if len(maxima) >= K_MAXIMA:
                 break
 
-            # Skip if below threshold
-            if xa[i] <= self.min_magnitude or xa[i] <= max_val / 4:
+            # Skip if below threshold (absolute or relative to max peak)
+            if xa[i] <= self.min_magnitude or xa[i] <= max_val * self.peak_threshold:
                 continue
 
             # Peak detection: rising then falling
@@ -399,6 +403,17 @@ class MultiPitchDetector:
         For quiet microphone input, try 0.1 or lower.
         """
         self.min_magnitude = max(0.01, threshold)
+
+    def set_peak_threshold(self, threshold: float):
+        """Set relative peak threshold for detection.
+
+        Peaks must be at least this fraction of the maximum peak to be detected.
+        Lower values detect weaker peaks but may pick up noise or harmonics.
+
+        Args:
+            threshold: Fraction of max peak (0.05 to 0.50, default 0.25)
+        """
+        self.peak_threshold = max(0.05, min(0.50, threshold))
 
     def reset(self):
         """Reset internal state."""

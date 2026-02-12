@@ -50,8 +50,9 @@ Click the "Settings" button to expand the settings panel with four tabs.
 - **Octave Filter** - When enabled (default), restricts detection to one octave above the fundamental, filtering out harmonics. This does not affect detection of closely-spaced tremolo reeds (which differ by only a few Hz). Turn OFF only when detecting octave pairs (e.g., A3+A4 playing together).
 - **Fundamental Filter** - Only detect harmonics of the fundamental frequency. Only accepts same-named notes (A, A, A...) 
 - **Downsample** - Enables downsampling for better low frequency detection. Helpful for bass reeds. *(FFT only)*
-- **Sensitivity** - Detection threshold (0.05-0.50). Lower values increase sensitivity but may detect more background noise.
+- **Sensitivity** - Detection threshold (0.01-0.50). Lower values increase sensitivity but may detect more background noise.
 - **Reed Spread** - Maximum cents deviation to group as the same note (20-100¢). Increase if your tremolo reeds have wide detuning.
+- **Peak Threshold** - Relative threshold (5-50%). Peaks must be at least this percentage of the maximum peak to be detected. Lower values detect weaker reeds but may pick up noise or harmonics. Useful when one reed is much quieter than others.
 
 **Measurement Stability:**
 

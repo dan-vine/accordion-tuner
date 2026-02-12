@@ -148,6 +148,9 @@ class EspritPitchDetector:
         # Minimum separation between detected frequencies (Hz)
         self._min_separation = 0.5
 
+        # Peak threshold: peaks must be at least this fraction of the maximum
+        self.peak_threshold = 0.10  # 10% - lower than FFT since ESPRIT filters later
+
     def process(self, samples: np.ndarray) -> MultiPitchResult:
         """
         Process audio samples and detect multiple pitches using FFT-ESPRIT.
@@ -399,8 +402,8 @@ class EspritPitchDetector:
         if max_mag < 1e-6:
             return np.array([])
 
-        # Only consider peaks above 10% of the maximum (reject noise/leakage)
-        mag_threshold = max_mag * 0.1
+        # Only consider peaks above threshold of the maximum (reject noise/leakage)
+        mag_threshold = max_mag * self.peak_threshold
         freq_step = freq_grid[1] - freq_grid[0]
 
         # Find local maxima (peaks) in the valid range
@@ -544,6 +547,17 @@ class EspritPitchDetector:
     def set_min_magnitude(self, threshold: float):
         """Set minimum magnitude threshold."""
         self.min_magnitude = max(0.01, threshold)
+
+    def set_peak_threshold(self, threshold: float):
+        """Set relative peak threshold for detection.
+
+        Peaks must be at least this fraction of the maximum peak to be detected.
+        Lower values detect weaker peaks but may pick up noise or harmonics.
+
+        Args:
+            threshold: Fraction of max peak (0.05 to 0.50, default 0.10)
+        """
+        self.peak_threshold = max(0.05, min(0.50, threshold))
 
     def set_width_threshold(self, threshold: float):
         """

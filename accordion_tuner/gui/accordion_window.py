@@ -68,6 +68,7 @@ class AccordionWindow(QMainWindow):
         'downsample': False,
         'sensitivity': 10,
         'reed_spread': 50,
+        'peak_threshold': 25,  # 25% of max peak
         'temperament': 8,  # Equal
         'key': 0,  # C
         'transpose': 0,
@@ -374,10 +375,13 @@ class AccordionWindow(QMainWindow):
         sens_layout = QHBoxLayout()
         sens_layout.addWidget(QLabel("Sensitivity:"))
         self._sensitivity_slider = QSlider(Qt.Orientation.Horizontal)
-        self._sensitivity_slider.setRange(5, 50)
+        self._sensitivity_slider.setRange(1, 50)
         self._sensitivity_slider.setValue(10)
         self._sensitivity_slider.setMinimumWidth(100)
-        self._sensitivity_slider.setToolTip("Detection threshold (lower = more sensitive)")
+        self._sensitivity_slider.setToolTip(
+            "Absolute threshold: minimum signal level to detect any peak.\n"
+            "Lower = detect quieter sounds (but more background noise)"
+        )
         self._sensitivity_slider.valueChanged.connect(self._on_sensitivity_changed)
         sens_layout.addWidget(self._sensitivity_slider)
         self._sensitivity_value = QLabel("0.10")
@@ -397,6 +401,23 @@ class AccordionWindow(QMainWindow):
         self._reed_spread_value = QLabel("50¢")
         spread_layout.addWidget(self._reed_spread_value)
         sliders_row.addLayout(spread_layout)
+
+        # Peak Threshold slider
+        peak_layout = QHBoxLayout()
+        peak_layout.addWidget(QLabel("Peak Threshold:"))
+        self._peak_threshold_slider = QSlider(Qt.Orientation.Horizontal)
+        self._peak_threshold_slider.setRange(5, 50)
+        self._peak_threshold_slider.setValue(25)
+        self._peak_threshold_slider.setMinimumWidth(100)
+        self._peak_threshold_slider.setToolTip(
+            "Relative threshold: peaks must be this % of the strongest peak.\n"
+            "Lower = detect weaker reeds alongside loud ones"
+        )
+        self._peak_threshold_slider.valueChanged.connect(self._on_peak_threshold_changed)
+        peak_layout.addWidget(self._peak_threshold_slider)
+        self._peak_threshold_value = QLabel("25%")
+        peak_layout.addWidget(self._peak_threshold_value)
+        sliders_row.addLayout(peak_layout)
 
         sliders_row.addStretch()
         detection_layout.addLayout(sliders_row)
@@ -805,6 +826,12 @@ class AccordionWindow(QMainWindow):
         """Handle reed spread slider change."""
         self._detector.set_reed_spread(float(value))
         self._reed_spread_value.setText(f"{value}¢")
+
+    def _on_peak_threshold_changed(self, value: int):
+        """Handle peak threshold slider change."""
+        threshold = value / 100.0
+        self._detector.set_peak_threshold(threshold)
+        self._peak_threshold_value.setText(f"{value}%")
 
     def _on_smoothing_changed(self, state):
         """Handle smoothing checkbox change."""
@@ -1231,6 +1258,9 @@ class AccordionWindow(QMainWindow):
         reed_spread = settings.value("reed_spread", self.DEFAULTS['reed_spread'], type=int)
         self._reed_spread_slider.setValue(reed_spread)
 
+        peak_threshold = settings.value("peak_threshold", self.DEFAULTS['peak_threshold'], type=int)
+        self._peak_threshold_slider.setValue(peak_threshold)
+
         # ESPRIT settings
         esprit_width = settings.value("esprit_width", self.DEFAULTS['esprit_width'], type=int)
         self._esprit_width_slider.setValue(esprit_width)
@@ -1324,6 +1354,7 @@ class AccordionWindow(QMainWindow):
         settings.setValue("downsample", self._downsample_cb.isChecked())
         settings.setValue("sensitivity", self._sensitivity_slider.value())
         settings.setValue("reed_spread", self._reed_spread_slider.value())
+        settings.setValue("peak_threshold", self._peak_threshold_slider.value())
 
         # ESPRIT settings
         settings.setValue("esprit_width", self._esprit_width_slider.value())
@@ -1385,6 +1416,7 @@ class AccordionWindow(QMainWindow):
         self._downsample_cb.setChecked(self.DEFAULTS['downsample'])
         self._sensitivity_slider.setValue(self.DEFAULTS['sensitivity'])
         self._reed_spread_slider.setValue(self.DEFAULTS['reed_spread'])
+        self._peak_threshold_slider.setValue(self.DEFAULTS['peak_threshold'])
         self._esprit_width_slider.setValue(self.DEFAULTS['esprit_width'])
         self._esprit_sep_slider.setValue(self.DEFAULTS['esprit_separation'])
         self._esprit_offsets_combo.setCurrentIndex(self.DEFAULTS['esprit_offsets'])

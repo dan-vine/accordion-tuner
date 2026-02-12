@@ -47,8 +47,8 @@ Click the "Settings" button to expand the settings panel with four tabs.
 - **ESPRIT** - Best for closely-spaced frequencies (1-5 Hz tremolo reeds). Uses subspace methods to achieve super-resolution frequency estimation beyond the FFT bin width. Recommended when FFT cannot resolve your tremolo reeds.
 
 **General Settings:**
-- **Octave Filter** - When enabled, restricts detection to one octave above the fundamental. Keep OFF for accordion tuning to detect closely-spaced tremolo reeds.
-- **Fundamental Filter** - Only detect harmonics of the fundamental frequency. Useful for filtering out non-harmonic noise.
+- **Octave Filter** - When enabled (default), restricts detection to one octave above the fundamental, filtering out harmonics. This does not affect detection of closely-spaced tremolo reeds (which differ by only a few Hz). Turn OFF only when detecting octave pairs (e.g., A3+A4 playing together).
+- **Fundamental Filter** - Only detect harmonics of the fundamental frequency. Only accepts same-named notes (A, A, A...) 
 - **Downsample** - Enables downsampling for better low frequency detection. Helpful for bass reeds. *(FFT only)*
 - **Sensitivity** - Detection threshold (0.05-0.50). Lower values increase sensitivity but may detect more background noise.
 - **Reed Spread** - Maximum cents deviation to group as the same note (20-100¢). Increase if your tremolo reeds have wide detuning.
@@ -72,7 +72,26 @@ These features help achieve stable, accurate measurements by accumulating data o
 
 #### ESPRIT Options
 
-When ESPRIT is selected, additional tuning options appear for fine-tuning close-frequency detection:
+When ESPRIT is selected, additional tuning options appear for fine-tuning close-frequency detection.
+
+**How ESPRIT resolves close frequencies:**
+
+Standard FFT has limited frequency resolution (about 0.67 Hz with the default settings). When two tremolo reeds are only 1-2 Hz apart, they appear as a single "merged" peak in the spectrum rather than two distinct peaks:
+
+```
+Two reeds 2 Hz apart in FFT:
+
+Single reed:              Merged reeds:
+      ▲                        ▲
+     ███                    ██████
+    █████                  ████████
+   ███████                ██████████
+  (narrow)               (wider shoulders)
+```
+
+ESPRIT detects merged peaks by checking if the "shoulders" of a peak are higher than expected for a single frequency. When detected, it adds candidate frequencies around the peak and uses subspace methods to resolve the actual frequencies. The candidates define a search neighborhood, but ESPRIT finds the true frequencies (within ~5 Hz of candidates) based on the signal itself - so detected frequencies are not limited to exact candidate positions.
+
+**Parameters:**
 
 | Parameter | Range | Default | Description |
 |-----------|-------|---------|-------------|

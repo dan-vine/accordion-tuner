@@ -63,7 +63,7 @@ class AccordionWindow(QMainWindow):
         'num_reeds': 3,
         'reference': 440.0,
         'algorithm': 0,  # 0=FFT, 1=MUSIC, 2=ESPRIT
-        'octave_filter': False,
+        'octave_filter': True,
         'fundamental_filter': False,
         'downsample': False,
         'sensitivity': 10,

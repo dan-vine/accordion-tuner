@@ -69,7 +69,59 @@ class MultiPitchDetector:
     """
     Multi-pitch detector using FFT + phase vocoder.
 
-    Detects multiple simultaneous notes in the spectrum.
+    Detects multiple simultaneous notes in the spectrum by analyzing FFT peaks
+    and using phase differences between frames for sub-bin frequency accuracy.
+
+    Parameters
+    ----------
+    sample_rate : int, default=11025
+        Audio sample rate in Hz. Must match the audio capture device rate.
+        Lower rates concentrate frequency resolution in the useful range.
+
+    fft_size : int, default=16384
+        FFT window size. Determines base frequency resolution:
+        resolution = sample_rate / fft_size (e.g., 11025/16384 ≈ 0.67 Hz/bin).
+        Larger values give finer resolution but increase latency.
+        Must be a power of 2 for FFT efficiency (4096, 8192, 16384, 32768...).
+
+    hop_size : int, default=1024
+        Number of samples between consecutive analysis frames.
+        Affects phase vocoder precision via oversample = fft_size / hop_size.
+        Must divide fft_size evenly. Smaller values give more frequent updates
+        and better phase tracking but increase CPU usage.
+
+    reference : float, default=440.0
+        Reference frequency for A4 in Hz.
+
+    Derived Values (calculated automatically)
+    -----------------------------------------
+    oversample : fft_size // hop_size
+        Phase vocoder precision factor. Higher = more accurate sub-bin estimation.
+        Default ratio of 16 (16384/1024) provides good accuracy.
+
+    fps : sample_rate / fft_size
+        Frequency per FFT bin in Hz.
+
+    range : fft_size * 7 // 16
+        Number of FFT bins to analyze (covers useful frequency range).
+
+    External Dependencies
+    ---------------------
+    - hop_size must match audio capture buffer size. The GUI reads this from
+      the detector automatically. The CLI uses BUFFER_SIZE from constants.py.
+    - sample_rate must match the audio device sample rate configured in
+      accordion_window.py and cli.py.
+
+    Trade-offs
+    ----------
+    - Larger fft_size: Better frequency resolution, but more latency
+      (need more samples before first detection).
+    - Smaller hop_size: More responsive, better phase tracking, but higher CPU.
+    - Lower sample_rate: Better resolution for low frequencies, but loses
+      high frequency range (Nyquist = sample_rate / 2).
+
+    The defaults (16384 FFT, 1024 hop, 11025 Hz) are tuned for accordion reed
+    tuning where sub-cent accuracy matters in the 80-2000 Hz range.
     """
 
     def __init__(
@@ -155,18 +207,38 @@ class MultiPitchDetector:
         xa = np.abs(spectrum[:self.range])
         xq = np.angle(spectrum[:self.range])
 
-        # Phase difference
+        # Phase difference between current and previous frame
         dxp = xq - self._prev_phase
 
         # Calculate frequencies using phase vocoder
+        # ------------------------------------------
+        # The phase vocoder achieves sub-bin frequency accuracy by analyzing
+        # how phase changes between consecutive FFT frames.
+        #
+        # Problem: FFT divides spectrum into discrete bins (fps = sample_rate/fft_size).
+        # A frequency between bins appears at the nearest bin, losing precision.
+        #
+        # Solution: For a pure sinusoid exactly at bin i, the phase advances by
+        # exactly (i * 2π * hop_size / fft_size) between frames. If the true
+        # frequency is slightly off-center, the phase advances faster or slower.
+        # By measuring this phase deviation, we can calculate the exact frequency.
+        #
+        # The math:
+        #   expected_phase_advance = i * 2π * hop_size / fft_size  (self.expect)
+        #   actual_phase_advance = dxp[i]
+        #   phase_deviation = actual - expected (after unwrapping)
+        #   frequency_correction = deviation * oversample / (2π)
+        #   true_frequency = bin_frequency + correction * fps
+        #
         xf = np.zeros(self.range, dtype=np.float64)
         dxa = np.zeros(self.range, dtype=np.float64)
 
         for i in range(1, self.range):
             dp = dxp[i]
-            dp -= i * self.expect
+            dp -= i * self.expect  # Subtract expected phase advance for bin i
 
-            # Unwrap phase
+            # Unwrap phase to [-π, π] range
+            # This handles the 2π ambiguity in phase measurements
             qpd = int(dp / np.pi)
             if qpd >= 0:
                 qpd += qpd & 1
@@ -174,9 +246,10 @@ class MultiPitchDetector:
                 qpd -= qpd & 1
             dp -= np.pi * qpd
 
-            # Frequency correction
+            # Frequency correction from phase deviation
+            # df is the fractional bin offset (-0.5 to +0.5)
             df = self.oversample * dp / (2.0 * np.pi)
-            xf[i] = i * self.fps + df * self.fps
+            xf[i] = i * self.fps + df * self.fps  # True frequency in Hz
 
             # Difference for peak detection
             dxa[i] = xa[i] - xa[i - 1]

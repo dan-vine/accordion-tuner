@@ -56,6 +56,38 @@ class EspritPitchDetector:
 
     This is particularly useful for accordion tremolo reeds which may be
     only 1-5 Hz apart.
+
+    Merged Peak Detection
+    ---------------------
+    When two frequencies are very close (e.g., 440 Hz and 442 Hz), standard FFT
+    shows them as a single merged peak rather than two distinct peaks. This
+    detector identifies merged peaks by analyzing spectral width:
+
+    - A pure sinusoid with Hamming window has predictable shoulder heights
+      (~8% of peak at ±2 bins, ~2% at ±3 bins)
+    - Merged frequencies produce wider peaks with higher shoulders
+    - When width_threshold is exceeded, candidate frequencies are added around
+      the peak to help ESPRIT resolve the close frequencies
+
+    The candidates define a search neighborhood, but ESPRIT extracts actual
+    frequencies from eigenvalues of the signal's subspace - so detected
+    frequencies can be anywhere within ~5 Hz of candidates, not just at
+    exact candidate positions.
+
+    Key Parameters
+    --------------
+    width_threshold : float
+        Shoulder-to-peak ratio threshold for detecting merged peaks.
+        Default 0.25 means shoulders >25% of peak height trigger detection.
+        Lower = more sensitive, higher = fewer false positives.
+
+    candidate_offsets : list[float]
+        Hz offsets added around merged peaks (e.g., [-0.8, -0.4, 0.4, 0.8]).
+        These guide ESPRIT's search but don't constrain the output frequencies.
+
+    min_separation : float
+        Minimum Hz between detected frequencies. Frequencies closer than this
+        are merged, keeping the one closest to a rough FFT estimate.
     """
 
     def __init__(
@@ -319,14 +351,28 @@ class EspritPitchDetector:
         """
         Estimate frequencies by finding local maxima in the FFT spectrum.
 
-        This provides rough initial estimates for FFT-ESPRIT.
+        This provides rough initial estimates for FFT-ESPRIT. When close
+        frequencies merge into a single wide peak, this method detects the
+        merging and adds candidate frequencies to help ESPRIT resolve them.
+
+        Merged Peak Detection Algorithm
+        --------------------------------
+        1. Find peaks in FFT spectrum using parabolic interpolation
+        2. If only one dominant peak exists, check its spectral width:
+           - Measure shoulder-to-peak ratio at ±2 and ±3 bins
+           - Single Hamming-windowed sinusoid: ~0.08 at ±2, ~0.02 at ±3
+           - Higher ratios indicate merged frequencies
+        3. If width exceeds threshold, add candidates at configured offsets
+           (e.g., peak ± 0.4 Hz, peak ± 0.8 Hz)
+        4. These candidates guide ESPRIT but don't constrain its output -
+           ESPRIT finds actual frequencies within ~5 Hz of any candidate
 
         Args:
             signal: Input signal
             count: Number of frequencies to search for (default: num_sources)
 
         Returns:
-            Array of estimated frequencies in Hz
+            Array of estimated frequencies in Hz, sorted ascending
         """
         if count is None:
             count = self.num_sources

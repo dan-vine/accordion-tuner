@@ -92,7 +92,7 @@ When SimpleFFT is selected, additional tuning options appear for fine-tuning clo
 1. **Pass 1** - Uses FFT peak detection to find the primary peak above the threshold
 2. **Pass 2** - Searches bidirectionally (both lower and higher frequencies) around the primary peak to find additional reeds within the search range
 
-This two-pass approach makes SimpleFFT particularly effective for very close reeds (<1 Hz apart) and for 3-4 reed accordions where reeds are tuned on both sides of the reference reed. Best results require several seconds of stable signal to accumulate.
+This two-pass approach makes SimpleFFT particularly effective for very close reeds (<1 Hz apart). Best results require several seconds of stable signal to accumulate.
 
 #### ESPRIT Options
 

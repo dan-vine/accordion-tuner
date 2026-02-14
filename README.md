@@ -15,12 +15,10 @@ A musical instrument tuner specialized for accordion reed tuning with multi-pitc
 
 ## Features
 
-- Multi-reed detection (1-4 simultaneous reeds)
+- Multi-reed detection (1-4 simultaneous reeds) for accordion tremolo/musette tuning
 - Beat frequency calculation for tremolo/musette tuning
 - Custom tremolo tuning profiles (CSV/TSV)
-- Multiple detection algorithms: FFT and ESPRIT
-- ESPRIT algorithm for super-resolution detection of close frequencies (<1 Hz apart)
-- Phase vocoder for accurate pitch detection
+- Multiple detection algorithms optimized for accordion reeds: FFT, SimpleFFT, and ESPRIT
 - Hold mode for capturing best measurement
 - Measurement log for recording and exporting tuning data
 
@@ -52,13 +50,13 @@ Click the "Settings" button to expand the settings panel with four tabs.
 ### Detection Tab
 
 **Algorithm:**
-- **FFT (Phase Vocoder)** - Default algorithm. Fast and reliable for most tuning scenarios. Uses FFT with phase vocoder for sub-bin frequency accuracy.
-- **ESPRIT** - Best for closely-spaced frequencies (1-5 Hz tremolo reeds). Uses subspace methods to achieve super-resolution frequency estimation beyond the FFT bin width. Recommended when FFT cannot resolve your tremolo reeds.
+- **FFT (Phase Vocoder)** - Default algorithm. Fast and reliable for typical accordion tuning. Uses FFT with phase vocoder for sub-bin frequency accuracy.
+- **SimpleFFT** - Best for very close tremolo reeds (<1 Hz apart). Uses zero-padding for higher frequency resolution and bidirectional search to find reeds on both sides of the primary peak. Requires several seconds to stabilize for best accuracy.
+- **ESPRIT** - Another method optimized for closely-spaced frequencies. Uses subspace methods to achieve super-resolution frequency estimation beyond the FFT bin width.
 
 **General Settings:**
 - **Octave Filter** - When enabled (default), restricts detection to one octave above the fundamental, filtering out harmonics. This does not affect detection of closely-spaced tremolo reeds (which differ by only a few Hz). Turn OFF only when detecting octave pairs (e.g., A3+A4 playing together).
 - **Fundamental Filter** - Only detect harmonics of the fundamental frequency. Only accepts same-named notes (A, A, A...) 
-- **Downsample** - Enables downsampling for better low frequency detection. Helpful for bass reeds. *(FFT only)*
 - **Sensitivity** - Detection threshold (0.01-0.50). Lower values increase sensitivity but may detect more background noise.
 - **Reed Spread** - Maximum cents deviation to group as the same note (20-100¢). Increase if your tremolo reeds have wide detuning.
 - **Peak Threshold** - Relative threshold (5-50%). Peaks must be at least this percentage of the maximum peak to be detected. Lower values detect weaker reeds but may pick up noise or harmonics. Useful when one reed is much quieter than others.
@@ -79,6 +77,22 @@ These features help achieve stable, accurate measurements by accumulating data o
     - 4 seconds: ~0.28 Hz resolution
   - Buffer automatically resets when the detected note changes
   - Measurements become more accurate as the buffer fills
+
+#### SimpleFFT Options
+
+When SimpleFFT is selected, additional tuning options appear for fine-tuning close-frequency detection.
+
+| Parameter | Range | Default | Description |
+|-----------|-------|---------|-------------|
+| **Search Range** | 1.0-8.0 Hz | 3.0 Hz | Search range for additional reeds around the primary peak. |
+| **Search Threshold** | 5-50% | 10% | Threshold for second-reed search relative to maximum magnitude. Lower values detect quieter reeds but may pick up noise. |
+
+**How SimpleFFT detects multiple reeds:**
+
+1. **Pass 1** - Uses FFT peak detection to find the primary peak above the threshold
+2. **Pass 2** - Searches bidirectionally (both lower and higher frequencies) around the primary peak to find additional reeds within the search range
+
+This two-pass approach makes SimpleFFT particularly effective for very close reeds (<1 Hz apart) and for 3-4 reed accordions where reeds are tuned on both sides of the reference reed. Best results require several seconds of stable signal to accumulate.
 
 #### ESPRIT Options
 

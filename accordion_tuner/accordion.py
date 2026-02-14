@@ -705,8 +705,9 @@ class AccordionDetector:
     def set_max_reeds(self, count: int):
         """Set maximum number of reeds to detect (minimum 2, maximum 4)."""
         self.max_reeds = min(max(2, count), 4)
-        # Update ESPRIT detector's num_sources if applicable
         if isinstance(self._detector, EspritPitchDetector):
+            self._detector.set_num_sources(self.max_reeds)
+        elif isinstance(self._detector, SimpleFftPeakDetector):
             self._detector.set_num_sources(self.max_reeds)
 
     def set_reed_spread(self, cents: float):

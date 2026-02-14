@@ -93,6 +93,10 @@ class SimpleFftPeakDetector:
         self.second_reed_search_hz = hz
         self.second_reed_threshold = threshold
 
+    def set_num_sources(self, n: int):
+        """Set maximum number of peaks to detect."""
+        self.num_sources = max(1, min(8, n))
+
     def reset(self):
         self._buffer = np.zeros(self.fft_size, dtype=np.float64)
 
@@ -222,70 +226,80 @@ class SimpleFftPeakDetector:
                 )
             )
 
-        # Pass 2: Look for additional reed near the first using lower threshold
-        # Only look for reeds that are at least 0.8 Hz away from the first (to avoid noise)
+        # Pass 2: Look for additional reeds near the first using lower threshold
+        # Search in both directions (below and above first frequency)
+        # Only look for reeds at least 0.8 Hz away from first (to avoid noise)
         if len(maxima) > 0 and len(maxima) < self.num_sources and self.second_reed_search_hz > 0:
             first_freq = maxima[0].frequency
-            # Search from 0.8 Hz away up to search_hz from first
-            search_min = first_freq + 0.8
-            search_max = first_freq + self.second_reed_search_hz
-
             second_threshold = max_mag * self.second_reed_threshold
+            min_separation = 0.8
 
-            # Find peaks in the search range with lower threshold
-            search_mask = (freqs_valid >= search_min) & (freqs_valid <= search_max)
-            search_freqs = freqs_valid[search_mask]
-            search_mags = mags_valid[search_mask]
+            additional_reeds = []
 
-            # Find the strongest peak in this range
-            if len(search_mags) > 0:
-                best_idx = np.argmax(search_mags)
-                best_freq = search_freqs[best_idx]
-                best_mag = search_mags[best_idx]
+            # Search in negative direction (lower frequencies)
+            search_min_low = max(60, first_freq - self.second_reed_search_hz)
+            search_max_low = first_freq - min_separation
+            if search_min_low < search_max_low:
+                search_mask = (freqs_valid >= search_min_low) & (freqs_valid <= search_max_low)
+                search_freqs = freqs_valid[search_mask]
+                search_mags = mags_valid[search_mask]
+                if len(search_mags) > 0:
+                    best_idx = np.argmax(search_mags)
+                    if search_mags[best_idx] >= second_threshold:
+                        additional_reeds.append((search_freqs[best_idx], search_mags[best_idx]))
 
-                if best_mag >= second_threshold:
-                    # Verify it's a local maximum
-                    is_peak = True
-                    if best_idx > 0 and search_mags[best_idx] <= search_mags[best_idx - 1]:
-                        is_peak = False
-                    if (
-                        best_idx < len(search_mags) - 1
-                        and search_mags[best_idx] <= search_mags[best_idx + 1]
-                    ):
-                        is_peak = False
+            # Search in positive direction (higher frequencies)
+            search_min_high = first_freq + min_separation
+            search_max_high = first_freq + self.second_reed_search_hz
+            if search_min_high < search_max_high:
+                search_mask = (freqs_valid >= search_min_high) & (freqs_valid <= search_max_high)
+                search_freqs = freqs_valid[search_mask]
+                search_mags = mags_valid[search_mask]
+                if len(search_mags) > 0:
+                    best_idx = np.argmax(search_mags)
+                    if search_mags[best_idx] >= second_threshold:
+                        additional_reeds.append((search_freqs[best_idx], search_mags[best_idx]))
 
-                    if is_peak:
-                        freq = best_freq
-                        mag = best_mag
+            # Add up to remaining slots
+            additional_reeds.sort(key=lambda x: x[1], reverse=True)
+            for freq, mag in additional_reeds:
+                if len(maxima) >= self.num_sources:
+                    break
 
-                        # Parabolic interpolation
-                        if best_idx > 0 and best_idx < len(search_mags) - 1:
-                            y1, y2, y3 = (
-                                search_mags[best_idx - 1],
-                                search_mags[best_idx],
-                                search_mags[best_idx + 1],
-                            )
-                            denom = y1 - 2 * y2 + y3
-                            if abs(denom) > 1e-10:
-                                delta = 0.5 * (y1 - y3) / denom
-                                freq_step = search_freqs[1] - search_freqs[0]
-                                freq = search_freqs[best_idx] + delta * freq_step
+                # Find index for interpolation
+                idx_arr = np.where(freqs_valid == freq)[0]
+                if len(idx_arr) == 0:
+                    continue
+                peak_idx = idx_arr[0]
 
-                        note, cents = self._frequency_to_note(freq)
-                        note_name, octave = self._note_number_to_name(note)
-                        note_ref_freq = self._get_reference_frequency(note)
+                # Parabolic interpolation
+                if peak_idx > 0 and peak_idx < len(mags_valid) - 1:
+                    y1, y2, y3 = (
+                        mags_valid[peak_idx - 1],
+                        mags_valid[peak_idx],
+                        mags_valid[peak_idx + 1],
+                    )
+                    denom = y1 - 2 * y2 + y3
+                    if abs(denom) > 1e-10:
+                        delta = 0.5 * (y1 - y3) / denom
+                        freq_step = freqs_valid[1] - freqs_valid[0]
+                        freq = freqs_valid[peak_idx] + delta * freq_step
 
-                        maxima.append(
-                            Maximum(
-                                frequency=freq,
-                                ref_frequency=note_ref_freq,
-                                note=note,
-                                cents=cents,
-                                note_name=note_name,
-                                octave=octave,
-                                magnitude=mag,
-                            )
-                        )
+                note, cents = self._frequency_to_note(freq)
+                note_name, octave = self._note_number_to_name(note)
+                note_ref_freq = self._get_reference_frequency(note)
+
+                maxima.append(
+                    Maximum(
+                        frequency=freq,
+                        ref_frequency=note_ref_freq,
+                        note=note,
+                        cents=cents,
+                        note_name=note_name,
+                        octave=octave,
+                        magnitude=mag,
+                    )
+                )
 
         primary = maxima[0] if maxima else Maximum()
         return MultiPitchResult(

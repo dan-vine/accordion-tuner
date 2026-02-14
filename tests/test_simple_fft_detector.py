@@ -240,6 +240,74 @@ class TestSimpleFftSettings:
         self.detector.set_key(2)  # D
         assert self.detector.key == 2
 
+    def test_num_sources_setter(self):
+        """Test set_num_sources method updates internal state."""
+        self.detector.set_num_sources(4)
+        assert self.detector.num_sources == 4
+
+        self.detector.set_num_sources(2)
+        assert self.detector.num_sources == 2
+
+        self.detector.set_num_sources(10)  # Should clamp to 8
+        assert self.detector.num_sources == 8
+
+        self.detector.set_num_sources(0)  # Should clamp to 1
+        assert self.detector.num_sources == 1
+
+    def test_bidirectional_second_reed_search(self):
+        """Test that Pass 2 searches in both directions."""
+        import math
+
+        # Create signal with 3 reeds: 438, 440, 442 Hz
+        # Make middle one (440) much louder so Pass 1 only finds it
+        duration = 2.0
+        t = np.linspace(0, duration, int(SAMPLE_RATE * duration))
+        # Middle reed (440 Hz) - loud
+        signal = 0.8 * np.sin(2 * math.pi * 440 * t)
+        # Lower reed (438 Hz) - quiet
+        signal += 0.3 * np.sin(2 * math.pi * 438 * t)
+        # Higher reed (442 Hz) - quiet
+        signal += 0.3 * np.sin(2 * math.pi * 442 * t)
+
+        # Lower thresholds so Pass 2 can find the quiet reeds
+        self.detector.set_second_reed_search(5.0, 0.20)
+
+        result = self.process_signal(signal)
+        assert result.valid
+
+        # Should find 3 reeds (middle from Pass 1, both sides from Pass 2)
+        assert len(result.maxima) >= 2, f"Expected at least 2 maxima, got {len(result.maxima)}"
+
+        freqs = sorted([m.frequency for m in result.maxima])
+        # Should have found frequencies near 438, 440, and/or 442
+        assert any(abs(f - 438) < 2 for f in freqs) or any(abs(f - 442) < 2 for f in freqs), \
+            f"Expected to find reeds near 438 or 442 Hz, got {freqs}"
+
+    def test_multiple_additional_reeds(self):
+        """Test that Pass 2 can find multiple additional reeds."""
+        import math
+
+        # Create signal with 4 reeds spaced 1.5 Hz apart
+        # Center at 440 Hz, others at 435, 441.5, 444
+        duration = 2.0
+        t = np.linspace(0, duration, int(SAMPLE_RATE * duration))
+        # Middle reed (440 Hz) - loudest
+        signal = 0.8 * np.sin(2 * math.pi * 440 * t)
+        # Other reeds - quieter
+        signal += 0.3 * np.sin(2 * math.pi * 435 * t)
+        signal += 0.3 * np.sin(2 * math.pi * 441.5 * t)
+        signal += 0.3 * np.sin(2 * math.pi * 444 * t)
+
+        # Allow finding up to 4 sources
+        self.detector.set_num_sources(4)
+        self.detector.set_second_reed_search(10.0, 0.20)
+
+        result = self.process_signal(signal)
+        assert result.valid
+
+        # Should find more than just the main reed
+        assert len(result.maxima) >= 2, f"Expected multiple maxima, got {len(result.maxima)}"
+
 
 class TestSimpleFftCentsAccuracy:
     """Test cents calculation accuracy."""

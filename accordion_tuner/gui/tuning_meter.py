@@ -36,7 +36,7 @@ class TuningMeter(QWidget):
         # Appearance settings
         self._min_cents = -50.0
         self._max_cents = 50.0
-        self._green_zone = 5.0   # ±5 cents = green
+        self._green_zone = 5.0  # ±5 cents = green
         self._orange_zone = 15.0  # ±15 cents = orange
 
         self.setMinimumSize(200, 30)
@@ -80,34 +80,54 @@ class TuningMeter(QWidget):
         green_end = self._cents_to_x(0 + self._green_zone, zone_x, zone_width)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(QColor(ACCENT_GREEN).darker(200)))
-        painter.drawRect(int(green_start), int(zone_y), int(green_end - green_start), int(zone_height))
+        painter.drawRect(
+            int(green_start), int(zone_y), int(green_end - green_start), int(zone_height)
+        )
 
         # Orange zones
         painter.setBrush(QBrush(QColor(WARNING_ORANGE).darker(200)))
         # Left orange
         orange_left_start = self._cents_to_x(0 - self._orange_zone, zone_x, zone_width)
-        painter.drawRect(int(orange_left_start), int(zone_y), int(green_start - orange_left_start), int(zone_height))
+        painter.drawRect(
+            int(orange_left_start),
+            int(zone_y),
+            int(green_start - orange_left_start),
+            int(zone_height),
+        )
         # Right orange
         orange_right_end = self._cents_to_x(0 + self._orange_zone, zone_x, zone_width)
-        painter.drawRect(int(green_end), int(zone_y), int(orange_right_end - green_end), int(zone_height))
+        painter.drawRect(
+            int(green_end), int(zone_y), int(orange_right_end - green_end), int(zone_height)
+        )
 
         # Red zones (outer)
         painter.setBrush(QBrush(QColor(ERROR_RED).darker(200)))
         # Left red
-        painter.drawRect(int(zone_x), int(zone_y), int(orange_left_start - zone_x), int(zone_height))
+        painter.drawRect(
+            int(zone_x), int(zone_y), int(orange_left_start - zone_x), int(zone_height)
+        )
         # Right red
-        painter.drawRect(int(orange_right_end), int(zone_y), int(zone_x + zone_width - orange_right_end), int(zone_height))
+        painter.drawRect(
+            int(orange_right_end),
+            int(zone_y),
+            int(zone_x + zone_width - orange_right_end),
+            int(zone_height),
+        )
 
         # Draw center line
         center_x = self._cents_to_x(0, margin, bar_width)
         painter.setPen(QPen(QColor(TEXT_COLOR), 2))
-        painter.drawLine(int(center_x), int(margin + 2), int(center_x), int(margin + bar_height - 2))
+        painter.drawLine(
+            int(center_x), int(margin + 2), int(center_x), int(margin + bar_height - 2)
+        )
 
         # Draw tick marks at ±10, ±20, ±30, ±40 cents
         painter.setPen(QPen(QColor(TEXT_COLOR).darker(150), 1))
         for tick in [-40, -30, -20, -10, 10, 20, 30, 40]:
             tick_x = self._cents_to_x(tick, margin, bar_width)
-            painter.drawLine(int(tick_x), int(margin + bar_height - 6), int(tick_x), int(margin + bar_height - 2))
+            painter.drawLine(
+                int(tick_x), int(margin + bar_height - 6), int(tick_x), int(margin + bar_height - 2)
+            )
 
         # Draw indicator if active
         if self._active:
@@ -127,12 +147,15 @@ class TuningMeter(QWidget):
             ]
             from PySide6.QtCore import QPointF
             from PySide6.QtGui import QPolygonF
+
             polygon = QPolygonF([QPointF(x, y) for x, y in points])
             painter.drawPolygon(polygon)
 
             # Vertical line
             painter.setPen(QPen(indicator_color, 3))
-            painter.drawLine(int(indicator_x), int(margin + 4), int(indicator_x), int(margin + bar_height - 2))
+            painter.drawLine(
+                int(indicator_x), int(margin + 4), int(indicator_x), int(margin + bar_height - 2)
+            )
 
     def _cents_to_x(self, cents: float, start: float, width: float) -> float:
         """Convert cents value to x coordinate."""
@@ -167,7 +190,7 @@ class MultiReedMeter(QWidget):
         # Appearance settings
         self._min_cents = -50.0
         self._max_cents = 50.0
-        self._green_zone = 5.0   # ±5 cents = green
+        self._green_zone = 5.0  # ±5 cents = green
         self._orange_zone = 15.0  # ±15 cents = orange
 
         # Reed indicator colors (distinct colors for each reed)
@@ -239,20 +262,37 @@ class MultiReedMeter(QWidget):
         painter.drawRect(int(zone_x), int(zone_y), int(red_left_end - zone_x), int(zone_height))
         # Right red
         red_right_start = self._cents_to_x(self._orange_zone, zone_x, zone_width)
-        painter.drawRect(int(red_right_start), int(zone_y), int(zone_x + zone_width - red_right_start), int(zone_height))
+        painter.drawRect(
+            int(red_right_start),
+            int(zone_y),
+            int(zone_x + zone_width - red_right_start),
+            int(zone_height),
+        )
 
         # Orange zones
         painter.setBrush(QBrush(QColor(WARNING_ORANGE).darker(200)))
         # Left orange
         orange_left_end = self._cents_to_x(-self._green_zone, zone_x, zone_width)
-        painter.drawRect(int(red_left_end), int(zone_y), int(orange_left_end - red_left_end), int(zone_height))
+        painter.drawRect(
+            int(red_left_end), int(zone_y), int(orange_left_end - red_left_end), int(zone_height)
+        )
         # Right orange
         orange_right_start = self._cents_to_x(self._green_zone, zone_x, zone_width)
-        painter.drawRect(int(orange_right_start), int(zone_y), int(red_right_start - orange_right_start), int(zone_height))
+        painter.drawRect(
+            int(orange_right_start),
+            int(zone_y),
+            int(red_right_start - orange_right_start),
+            int(zone_height),
+        )
 
         # Green zone (center)
         painter.setBrush(QBrush(QColor(ACCENT_GREEN).darker(200)))
-        painter.drawRect(int(orange_left_end), int(zone_y), int(orange_right_start - orange_left_end), int(zone_height))
+        painter.drawRect(
+            int(orange_left_end),
+            int(zone_y),
+            int(orange_right_start - orange_left_end),
+            int(zone_height),
+        )
 
         # Draw center line
         center_x = self._cents_to_x(0, bar_x, bar_width)

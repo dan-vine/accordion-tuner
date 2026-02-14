@@ -33,6 +33,7 @@ from .styles import (
 @dataclass
 class MeasurementEntry:
     """A single recorded measurement."""
+
     timestamp: str  # "HH:MM:SS"
     note_name: str  # "A4"
     ref_frequency: float  # 440.0
@@ -131,13 +132,21 @@ class MeasurementLogWindow(QWidget):
         # Table for measurements
         self._table = QTableWidget()
         self._table.setColumnCount(11)
-        self._table.setHorizontalHeaderLabels([
-            "Time", "Note", "Ref Hz",
-            "Reed1 Hz", "Reed1 ¢",
-            "Reed2 Hz", "Reed2 ¢",
-            "Reed3 Hz", "Reed3 ¢",
-            "Reed4 Hz", "Reed4 ¢",
-        ])
+        self._table.setHorizontalHeaderLabels(
+            [
+                "Time",
+                "Note",
+                "Ref Hz",
+                "Reed1 Hz",
+                "Reed1 ¢",
+                "Reed2 Hz",
+                "Reed2 ¢",
+                "Reed3 Hz",
+                "Reed3 ¢",
+                "Reed4 Hz",
+                "Reed4 ¢",
+            ]
+        )
 
         # Configure table appearance
         self._table.setAlternatingRowColors(True)
@@ -176,7 +185,9 @@ class MeasurementLogWindow(QWidget):
 
     def _apply_style(self):
         """Apply styling to the window."""
-        self.setStyleSheet(MAIN_WINDOW_STYLE + f"""
+        self.setStyleSheet(
+            MAIN_WINDOW_STYLE
+            + f"""
             QTableWidget {{
                 background-color: {PANEL_BACKGROUND};
                 border: 1px solid {BORDER_COLOR};
@@ -194,7 +205,8 @@ class MeasurementLogWindow(QWidget):
                 padding: 4px;
                 font-weight: bold;
             }}
-        """)
+        """
+        )
 
     def _on_mode_changed(self):
         """Handle recording mode change."""
@@ -288,11 +300,17 @@ class MeasurementLogWindow(QWidget):
 
         # Header
         headers = [
-            "Time", "Note", "Ref Hz",
-            "Reed1 Hz", "Reed1 ¢",
-            "Reed2 Hz", "Reed2 ¢",
-            "Reed3 Hz", "Reed3 ¢",
-            "Reed4 Hz", "Reed4 ¢",
+            "Time",
+            "Note",
+            "Ref Hz",
+            "Reed1 Hz",
+            "Reed1 ¢",
+            "Reed2 Hz",
+            "Reed2 ¢",
+            "Reed3 Hz",
+            "Reed3 ¢",
+            "Reed4 Hz",
+            "Reed4 ¢",
         ]
         lines.append("\t".join(headers))
 

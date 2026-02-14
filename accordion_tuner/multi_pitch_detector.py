@@ -34,6 +34,7 @@ K_SCALE = 2048.0
 @dataclass
 class Maximum:
     """Detected peak in the spectrum"""
+
     frequency: float = 0.0
     ref_frequency: float = 0.0
     note: int = 0
@@ -46,6 +47,7 @@ class Maximum:
 @dataclass
 class MultiPitchResult:
     """Result of multi-pitch detection"""
+
     maxima: list[Maximum] = field(default_factory=list)
     primary_frequency: float = 0.0
     primary_note: int = 0
@@ -152,7 +154,6 @@ class MultiPitchDetector:
 
         # Filters
         self.fundamental_filter = False  # Only detect harmonics of fundamental
-        self.downsample = False  # Downsample spectrum for low notes
         self.octave_filter = True  # Limit search to one octave above fundamental
 
         # Detection threshold (can be lowered for quiet inputs)
@@ -181,9 +182,9 @@ class MultiPitchDetector:
         self._buffer = np.roll(self._buffer, -shift)
 
         if len(samples) >= self.fft_size:
-            self._buffer[:] = samples[-self.fft_size:]
+            self._buffer[:] = samples[-self.fft_size :]
         else:
-            self._buffer[-len(samples):] = samples
+            self._buffer[-len(samples) :] = samples
 
         # Normalize
         dmax = np.max(np.abs(self._buffer))
@@ -208,8 +209,8 @@ class MultiPitchDetector:
         spectrum = spectrum / K_SCALE
 
         # Magnitude and phase
-        xa = np.abs(spectrum[:self.range])
-        xq = np.angle(spectrum[:self.range])
+        xa = np.abs(spectrum[: self.range])
+        xq = np.angle(spectrum[: self.range])
 
         # Phase difference between current and previous frame
         dxp = xq - self._prev_phase
@@ -324,7 +325,7 @@ class MultiPitchDetector:
             maxima.append(maximum)
 
             # Limit search to one octave above fundamental to avoid harmonics
-            if self.octave_filter and not self.downsample and limit > i * 2:
+            if self.octave_filter and limit > i * 2:
                 limit = i * 2 - 1
 
         if not maxima:
@@ -379,10 +380,6 @@ class MultiPitchDetector:
     def set_fundamental_filter(self, enabled: bool):
         """Enable/disable fundamental filter (only detect harmonics)."""
         self.fundamental_filter = enabled
-
-    def set_downsample(self, enabled: bool):
-        """Enable/disable downsampling for low frequency detection."""
-        self.downsample = enabled
 
     def set_octave_filter(self, enabled: bool):
         """Enable/disable octave filter.

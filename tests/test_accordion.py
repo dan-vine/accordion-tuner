@@ -5,7 +5,7 @@ Tests for accordion reed detection.
 import numpy as np
 import pytest
 
-from accordion_tuner.accordion import AccordionDetector, AccordionResult, ReedInfo
+from accordion_tuner.accordion import AccordionDetector, AccordionResult, DetectorType, ReedInfo
 
 
 class TestReedInfo:
@@ -173,6 +173,17 @@ class TestAccordionDetector:
 
         self.detector.set_max_reeds(10)
         assert self.detector.max_reeds == 4
+
+    def test_max_reeds_updates_simple_fft_detector(self):
+        """Test that set_max_reeds updates SimpleFFT detector's num_sources."""
+        detector = AccordionDetector(detector_type=DetectorType.SIMPLE_FFT)
+        assert detector._detector.num_sources == 4  # default max_reeds
+
+        detector.set_max_reeds(3)
+        assert detector._detector.num_sources == 3
+
+        detector.set_max_reeds(2)
+        assert detector._detector.num_sources == 2
 
     def test_reed_spread_setting(self):
         """Test setting reed spread tolerance."""

@@ -145,7 +145,11 @@ class SpectrumView(QFrame):
             painter.setPen(QPen(QColor(TEXT_SECONDARY), 1))
 
         # Draw spectrum if data available
-        if self._frequencies is not None and self._magnitudes is not None and len(self._frequencies) > 0:
+        if (
+            self._frequencies is not None
+            and self._magnitudes is not None
+            and len(self._frequencies) > 0
+        ):
             # Create path for spectrum line
             path = QPainterPath()
 
@@ -213,7 +217,7 @@ class SpectrumView(QFrame):
         db = 20 * np.log10(mag)
         # Map dB range (0 to -60) to y coordinate
         db_min = -60  # Bottom of display
-        db_max = 0    # Top of display
+        db_max = 0  # Top of display
         db = max(db_min, min(db_max, db))  # Clamp to range
         normalized = (db_max - db) / (db_max - db_min)  # 0 at top, 1 at bottom
         return start + normalized * height

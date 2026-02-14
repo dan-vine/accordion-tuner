@@ -15,6 +15,7 @@ import numpy as np
 
 class ReedMeasurement(NamedTuple):
     """Single measurement for a reed."""
+
     frequency: float
     cents: float
     magnitude: float
@@ -23,11 +24,12 @@ class ReedMeasurement(NamedTuple):
 @dataclass
 class SmoothedReed:
     """Smoothed measurement result for a single reed."""
+
     frequency: float
     cents: float
     magnitude: float
     sample_count: int  # Number of samples in the average
-    stability: float   # 0.0 to 1.0, higher = more stable
+    stability: float  # 0.0 to 1.0, higher = more stable
 
 
 class ReedSmoother:
@@ -214,9 +216,7 @@ class MeasurementSmoother:
         """Set maximum samples for averaging window."""
         self.max_samples = max_samples
         # Recreate smoothers with new size
-        self._reed_smoothers = [
-            ReedSmoother(max_samples) for _ in range(self.max_reeds)
-        ]
+        self._reed_smoothers = [ReedSmoother(max_samples) for _ in range(self.max_reeds)]
 
     @property
     def is_active(self) -> bool:

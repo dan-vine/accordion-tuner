@@ -23,6 +23,7 @@ class TremoloProfile:
         path: Original file path the profile was loaded from
         beat_frequencies: Mapping of note name (e.g., "G2", "A#3") to beat frequency in Hz
     """
+
     name: str = ""
     path: str = ""
     beat_frequencies: dict[str, float] = field(default_factory=dict)
@@ -51,8 +52,13 @@ class TremoloProfile:
         """Normalize note name to use sharps instead of flats."""
         # Map flats to sharps
         flat_to_sharp = {
-            "Db": "C#", "Eb": "D#", "Fb": "E", "Gb": "F#",
-            "Ab": "G#", "Bb": "A#", "Cb": "B"
+            "Db": "C#",
+            "Eb": "D#",
+            "Fb": "E",
+            "Gb": "F#",
+            "Ab": "G#",
+            "Bb": "A#",
+            "Cb": "B",
         }
         return flat_to_sharp.get(note_name, note_name)
 
@@ -92,18 +98,18 @@ def load_profile(path: str) -> TremoloProfile:
     )
 
     # Pattern to match note names like "C2", "F#3", "Bb4"
-    note_pattern = re.compile(r'^([A-Ga-g][#b]?)(\d+)$')
+    note_pattern = re.compile(r"^([A-Ga-g][#b]?)(\d+)$")
 
-    with open(file_path, encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         # Try to detect delimiter
         content = f.read()
         f.seek(0)
 
         # Determine delimiter: tab or comma
-        if '\t' in content:
-            delimiter = '\t'
+        if "\t" in content:
+            delimiter = "\t"
         else:
-            delimiter = ','
+            delimiter = ","
 
         reader = csv.reader(f, delimiter=delimiter)
         line_num = 0
@@ -117,7 +123,7 @@ def load_profile(path: str) -> TremoloProfile:
 
             # Skip comment lines
             first_cell = row[0].strip()
-            if first_cell.startswith('#'):
+            if first_cell.startswith("#"):
                 continue
 
             # Need at least note and beat frequency
@@ -139,14 +145,19 @@ def load_profile(path: str) -> TremoloProfile:
 
             note_name = match.group(1).upper()
             # Handle lowercase 'b' for flat
-            if len(note_name) > 1 and note_name[1] == 'B':
-                note_name = note_name[0] + 'b'
+            if len(note_name) > 1 and note_name[1] == "B":
+                note_name = note_name[0] + "b"
             octave = match.group(2)
 
             # Normalize to sharps for storage
             flat_to_sharp = {
-                "Db": "C#", "Eb": "D#", "Fb": "E", "Gb": "F#",
-                "Ab": "G#", "Bb": "A#", "Cb": "B"
+                "Db": "C#",
+                "Eb": "D#",
+                "Fb": "E",
+                "Gb": "F#",
+                "Ab": "G#",
+                "Bb": "A#",
+                "Cb": "B",
             }
             if note_name in flat_to_sharp:
                 note_name = flat_to_sharp[note_name]

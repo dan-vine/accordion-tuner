@@ -10,7 +10,7 @@ FFT_SIZE = 4096
 # Reference values
 A4_REFERENCE = 440.0
 C5_OFFSET = 57  # MIDI note number offset (A4 = 69, so C0 = 12, offset = 57)
-A_OFFSET = 9    # A is 9 semitones above C
+A_OFFSET = 9  # A is 9 semitones above C
 OCTAVE = 12
 
 # Note names

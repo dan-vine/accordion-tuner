@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-02-13T16:19:39.371173",
+  "note": "A4",
+  "note_name": "A",
+  "octave": 4,
+  "sample_rate": 11025,
+  "files": {
+    "reed1": "reed1_A4_20260213_161855.npy",
+    "reed2": "reed2_A4_20260213_161855.npy",
+    "combined": "combined_A4_20260213_161855.npy"
+  },
+  "ground_truth": {
+    "reed1_hz": 444.5658884925013,
+    "reed2_hz": 446.13238844342,
+    "separation_hz": 1.5664999509186828,
+    "separation_cents": 6.0895612336923595
+  },
+  "fft_detection": {
+    "detected_frequencies": [
+      444.7938813483874,
+      444.81539810408617
+    ],
+    "reed_count_detected": 2
+  },
+  "esprit_detection": {
+    "detected_frequencies": [
+      445.031838814352,
+      445.031838814352
+    ],
+    "reed_count_detected": 2
+  }
+}

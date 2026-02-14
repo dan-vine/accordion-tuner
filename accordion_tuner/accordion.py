@@ -20,6 +20,7 @@ from .constants import (
 from .esprit_detector import EspritPitchDetector
 from .measurement_smoother import MeasurementSmoother
 from .multi_pitch_detector import Maximum, MultiPitchDetector
+from .simple_fft_detector import SimpleFftPeakDetector
 from .temperaments import Temperament
 
 if TYPE_CHECKING:
@@ -30,6 +31,7 @@ class DetectorType(Enum):
     """Type of pitch detection algorithm."""
     FFT = "fft"        # FFT + Phase Vocoder (default)
     ESPRIT = "esprit"  # FFT-ESPRIT (best for close frequencies)
+    SIMPLE_FFT = "simple_fft"  # Simple FFT with scipy find_peaks
 
 
 @dataclass
@@ -147,10 +149,16 @@ class AccordionDetector:
 
     def _create_detector(
         self, detector_type: DetectorType
-    ) -> MultiPitchDetector | EspritPitchDetector:
+    ) -> MultiPitchDetector | EspritPitchDetector | SimpleFftPeakDetector:
         """Create a pitch detector of the specified type."""
         if detector_type == DetectorType.ESPRIT:
             return EspritPitchDetector(
+                sample_rate=self.sample_rate,
+                reference=self.reference,
+                num_sources=self.max_reeds,
+            )
+        elif detector_type == DetectorType.SIMPLE_FFT:
+            return SimpleFftPeakDetector(
                 sample_rate=self.sample_rate,
                 reference=self.reference,
                 num_sources=self.max_reeds,
@@ -163,8 +171,13 @@ class AccordionDetector:
 
     def _configure_detector(self):
         """Configure the current detector with accordion-specific settings."""
-        # Disable octave filter to detect closely-spaced frequencies
-        self._detector.set_octave_filter(False)
+        if self._detector_type == DetectorType.SIMPLE_FFT:
+            # Enable filters for SimpleFFT to focus on fundamentals
+            self._detector.set_octave_filter(True)
+            self._detector.set_fundamental_filter(True)
+        else:
+            # Disable octave filter to detect closely-spaced frequencies
+            self._detector.set_octave_filter(False)
         # Lower threshold for typical microphone input levels
         self._detector.set_min_magnitude(0.1)
 

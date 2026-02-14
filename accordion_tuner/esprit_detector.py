@@ -130,9 +130,8 @@ class EspritPitchDetector:
         # Window for FFT-based magnitude estimation
         self._window = np.hamming(fft_size)
 
-        # Filters (for interface compatibility with MultiPitchDetector)
+        # Filters
         self.fundamental_filter = False
-        self.downsample = False
         self.octave_filter = True
 
         # Configurable parameters for close-frequency detection
@@ -170,9 +169,9 @@ class EspritPitchDetector:
         self._buffer = np.roll(self._buffer, -shift)
 
         if len(samples) >= self.fft_size:
-            self._buffer[:] = samples[-self.fft_size:]
+            self._buffer[:] = samples[-self.fft_size :]
         else:
-            self._buffer[-len(samples):] = samples
+            self._buffer[-len(samples) :] = samples
 
         # Normalize
         dmax = np.max(np.abs(self._buffer))
@@ -298,7 +297,7 @@ class EspritPitchDetector:
         try:
             q_matrix, _ = qr(projected, mode="economic")
         except np.linalg.LinAlgError:
-            return list(rough_freqs[:self.num_sources])
+            return list(rough_freqs[: self.num_sources])
 
         # 5. ESPRIT solver (Least Squares)
         q_upper = q_matrix[:-1, :]
@@ -307,11 +306,11 @@ class EspritPitchDetector:
         try:
             rotation_op = pinv(q_upper) @ q_lower
         except np.linalg.LinAlgError:
-            return list(rough_freqs[:self.num_sources])
+            return list(rough_freqs[: self.num_sources])
 
         eigenvalues = _safe_eigvals(rotation_op)
         if eigenvalues is None:
-            return list(rough_freqs[:self.num_sources])
+            return list(rough_freqs[: self.num_sources])
 
         # 6. Extract frequencies from eigenvalue angles
         omegas = np.angle(eigenvalues)
@@ -348,9 +347,7 @@ class EspritPitchDetector:
 
         return valid_freqs
 
-    def _estimate_freqs_iterative(
-        self, signal: np.ndarray, count: int | None = None
-    ) -> np.ndarray:
+    def _estimate_freqs_iterative(self, signal: np.ndarray, count: int | None = None) -> np.ndarray:
         """
         Estimate frequencies by finding local maxima in the FFT spectrum.
 
@@ -449,7 +446,9 @@ class EspritPitchDetector:
 
             # Single sinusoid with Hamming: ~0.08 at ±2 bins, ~0.02 at ±3 bins
             # Merged frequencies show higher ratios (configurable threshold)
-            is_wide = width_ratio > self._width_threshold or width_ratio_3 > self._width_threshold * 0.32
+            is_wide = (
+                width_ratio > self._width_threshold or width_ratio_3 > self._width_threshold * 0.32
+            )
 
             if is_wide and self._candidate_offsets:
                 peak_freq = peaks[0][0]
@@ -479,9 +478,7 @@ class EspritPitchDetector:
 
         return np.sort(np.array(freqs))
 
-    def _estimate_magnitudes(
-        self, signal: np.ndarray, frequencies: list[float]
-    ) -> list[float]:
+    def _estimate_magnitudes(self, signal: np.ndarray, frequencies: list[float]) -> list[float]:
         """Estimate magnitudes at detected frequencies using FFT."""
         windowed = signal * self._window
         spectrum = np.fft.rfft(windowed)
@@ -491,7 +488,7 @@ class EspritPitchDetector:
         for freq in frequencies:
             idx = np.argmin(np.abs(fft_freqs - freq))
             if 0 < idx < len(spectrum) - 1:
-                mag = np.abs(spectrum[idx - 1: idx + 2]).max()
+                mag = np.abs(spectrum[idx - 1 : idx + 2]).max()
             else:
                 mag = np.abs(spectrum[idx])
             magnitudes.append(mag / 2048.0)
@@ -535,10 +532,6 @@ class EspritPitchDetector:
     def set_fundamental_filter(self, enabled: bool):
         """Enable/disable fundamental filter."""
         self.fundamental_filter = enabled
-
-    def set_downsample(self, enabled: bool):
-        """Enable/disable downsampling."""
-        self.downsample = enabled
 
     def set_octave_filter(self, enabled: bool):
         """Enable/disable octave filter."""

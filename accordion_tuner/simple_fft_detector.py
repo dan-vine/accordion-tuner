@@ -5,15 +5,17 @@ This detector uses scipy's find_peaks function for robust peak detection
 with zero-padding for higher frequency resolution.
 """
 
-
 import numpy as np
 from scipy.signal import find_peaks
 
 from accordion_tuner.constants import (
     A4_REFERENCE,
+    A_OFFSET,
+    OCTAVE,
     SAMPLE_RATE,
 )
 from accordion_tuner.multi_pitch_detector import Maximum, MultiPitchResult
+from accordion_tuner.temperaments import TEMPERAMENT_RATIOS, Temperament
 
 
 class SimpleFftPeakDetector:
@@ -62,6 +64,9 @@ class SimpleFftPeakDetector:
         self.fundamental_filter = False
         self.octave_filter = True
         self._min_magnitude = 0.0
+        self.peak_threshold = 0.25
+        self.temperament = Temperament.EQUAL
+        self.key = 0
 
     def set_octave_filter(self, enabled: bool):
         self.octave_filter = enabled
@@ -76,16 +81,13 @@ class SimpleFftPeakDetector:
         self.reference = reference
 
     def set_peak_threshold(self, threshold: float):
-        pass
+        self.peak_threshold = max(0.05, min(0.50, threshold))
 
-    def set_downsample(self, downsample: bool):
-        pass
-
-    def set_temperament(self, temperament):
-        pass
+    def set_temperament(self, temperament: Temperament):
+        self.temperament = temperament
 
     def set_key(self, key: int):
-        pass
+        self.key = key % OCTAVE
 
     def set_second_reed_search(self, hz: float, threshold: float = 0.10):
         self.second_reed_search_hz = hz
@@ -93,6 +95,25 @@ class SimpleFftPeakDetector:
 
     def reset(self):
         self._buffer = np.zeros(self.fft_size, dtype=np.float64)
+
+    def _get_reference_frequency(self, note: int) -> float:
+        """Calculate temperament-adjusted reference frequency for a note."""
+        note_in_octave = note % OCTAVE
+
+        ratios = TEMPERAMENT_RATIOS[self.temperament]
+        equal_ratios = TEMPERAMENT_RATIOS[Temperament.EQUAL]
+
+        n = (note_in_octave - self.key + OCTAVE) % OCTAVE
+        a = (A_OFFSET - self.key + OCTAVE) % OCTAVE
+
+        temper_ratio = ratios[n] / ratios[a]
+        equal_ratio = equal_ratios[n] / equal_ratios[a]
+        temper_adjust = temper_ratio / equal_ratio
+
+        semitones_from_a4 = note - 69
+        equal_freq = self.reference * (2 ** (semitones_from_a4 / 12))
+
+        return equal_freq * temper_adjust
 
     def process(self, samples: np.ndarray) -> MultiPitchResult:
         """
@@ -111,9 +132,9 @@ class SimpleFftPeakDetector:
         self._buffer = np.roll(self._buffer, -shift)
 
         if len(samples) >= self.fft_size:
-            self._buffer[:] = samples[-self.fft_size:]
+            self._buffer[:] = samples[-self.fft_size :]
         else:
-            self._buffer[-len(samples):] = samples
+            self._buffer[-len(samples) :] = samples
 
         signal = self._buffer * self._window
 
@@ -129,8 +150,11 @@ class SimpleFftPeakDetector:
         if len(mags_valid) == 0:
             return MultiPitchResult()
 
-        # Use 25% threshold like FFT to filter out small noise peaks
-        min_magnitude = np.max(mags_valid) * 0.25
+        max_mag = np.max(mags_valid)
+
+        # Use peak_threshold and min_magnitude to filter out noise peaks
+        relative_threshold = max_mag * self.peak_threshold
+        min_magnitude = max(self._min_magnitude, relative_threshold)
         distance = 1
 
         peaks, properties = find_peaks(
@@ -145,9 +169,8 @@ class SimpleFftPeakDetector:
 
         peaks = np.sort(peaks)
 
-        # Pass 1: Find peaks with 25% threshold (like FFT)
-        max_mag = np.max(mags_valid)
-        min_magnitude = max_mag * 0.25
+        # Pass 1: Find peaks with peak_threshold
+        min_magnitude = max(self._min_magnitude, max_mag * self.peak_threshold)
 
         maxima = []
         first_note = None
@@ -161,7 +184,11 @@ class SimpleFftPeakDetector:
             mag = mags_valid[peak_idx]
 
             if peak_idx > 0 and peak_idx < len(mags_valid) - 1:
-                y1, y2, y3 = mags_valid[peak_idx - 1], mags_valid[peak_idx], mags_valid[peak_idx + 1]
+                y1, y2, y3 = (
+                    mags_valid[peak_idx - 1],
+                    mags_valid[peak_idx],
+                    mags_valid[peak_idx + 1],
+                )
                 denom = y1 - 2 * y2 + y3
                 if abs(denom) > 1e-10:
                     delta = 0.5 * (y1 - y3) / denom
@@ -181,7 +208,7 @@ class SimpleFftPeakDetector:
 
             note_name, octave = self._note_number_to_name(note)
 
-            note_ref_freq = self.reference * (2 ** ((note - 69) / 12))
+            note_ref_freq = self._get_reference_frequency(note)
 
             maxima.append(
                 Maximum(
@@ -221,7 +248,10 @@ class SimpleFftPeakDetector:
                     is_peak = True
                     if best_idx > 0 and search_mags[best_idx] <= search_mags[best_idx - 1]:
                         is_peak = False
-                    if best_idx < len(search_mags) - 1 and search_mags[best_idx] <= search_mags[best_idx + 1]:
+                    if (
+                        best_idx < len(search_mags) - 1
+                        and search_mags[best_idx] <= search_mags[best_idx + 1]
+                    ):
                         is_peak = False
 
                     if is_peak:
@@ -230,8 +260,12 @@ class SimpleFftPeakDetector:
 
                         # Parabolic interpolation
                         if best_idx > 0 and best_idx < len(search_mags) - 1:
-                            y1, y2, y3 = search_mags[best_idx-1], search_mags[best_idx], search_mags[best_idx+1]
-                            denom = y1 - 2*y2 + y3
+                            y1, y2, y3 = (
+                                search_mags[best_idx - 1],
+                                search_mags[best_idx],
+                                search_mags[best_idx + 1],
+                            )
+                            denom = y1 - 2 * y2 + y3
                             if abs(denom) > 1e-10:
                                 delta = 0.5 * (y1 - y3) / denom
                                 freq_step = search_freqs[1] - search_freqs[0]
@@ -239,7 +273,7 @@ class SimpleFftPeakDetector:
 
                         note, cents = self._frequency_to_note(freq)
                         note_name, octave = self._note_number_to_name(note)
-                        note_ref_freq = self.reference * (2 ** ((note - 69) / 12))
+                        note_ref_freq = self._get_reference_frequency(note)
 
                         maxima.append(
                             Maximum(
@@ -267,7 +301,8 @@ class SimpleFftPeakDetector:
         if frequency <= 0:
             return 0, 0.0
         note = int(round(12.0 * np.log2(frequency / self.reference) + 69))
-        cents = 1200.0 * np.log2(frequency / self.reference) - (note - 69) * 100.0
+        ref_freq = self._get_reference_frequency(note)
+        cents = 1200.0 * np.log2(frequency / ref_freq)
         return note, cents
 
     def _note_number_to_name(self, note: int) -> tuple[str, int]:

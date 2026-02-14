@@ -222,6 +222,24 @@ class TestSimpleFftSettings:
         assert self.detector.second_reed_search_hz == 2.0
         assert self.detector.second_reed_threshold == 0.15
 
+    def test_temperament_default(self):
+        """Test that equal temperament is the default."""
+        from accordion_tuner.temperaments import Temperament
+
+        assert self.detector.temperament == Temperament.EQUAL
+
+    def test_temperament_setting(self):
+        """Test setting a different temperament."""
+        from accordion_tuner.temperaments import Temperament
+
+        self.detector.set_temperament(Temperament.PYTHAGOREAN)
+        assert self.detector.temperament == Temperament.PYTHAGOREAN
+
+    def test_key_setting(self):
+        """Test key setting."""
+        self.detector.set_key(2)  # D
+        assert self.detector.key == 2
+
 
 class TestSimpleFftCentsAccuracy:
     """Test cents calculation accuracy."""

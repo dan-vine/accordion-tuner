@@ -29,7 +29,8 @@ if TYPE_CHECKING:
 
 class DetectorType(Enum):
     """Type of pitch detection algorithm."""
-    FFT = "fft"        # FFT + Phase Vocoder (default)
+
+    FFT = "fft"  # FFT + Phase Vocoder (default)
     ESPRIT = "esprit"  # FFT-ESPRIT (best for close frequencies)
     SIMPLE_FFT = "simple_fft"  # Simple FFT with scipy find_peaks
 
@@ -37,33 +38,38 @@ class DetectorType(Enum):
 @dataclass
 class ReedInfo:
     """Information about a single detected reed."""
-    frequency: float = 0.0      # Detected frequency in Hz
-    cents: float = 0.0          # Deviation from reference in cents
-    magnitude: float = 0.0      # Signal strength (for confidence)
+
+    frequency: float = 0.0  # Detected frequency in Hz
+    cents: float = 0.0  # Deviation from reference in cents
+    magnitude: float = 0.0  # Signal strength (for confidence)
     target_cents: float | None = None  # Deviation from target (when profile active)
-    stability: float = 0.0      # Measurement stability (0.0-1.0, higher = more stable)
-    sample_count: int = 0       # Number of samples in the smoothed average
+    stability: float = 0.0  # Measurement stability (0.0-1.0, higher = more stable)
+    sample_count: int = 0  # Number of samples in the smoothed average
     # Precision mode fields (from long-window FFT)
-    precision_frequency: float | None = None  # High-resolution frequency (when precision mode enabled)
-    precision_cents: float | None = None      # High-resolution cents deviation
+    precision_frequency: float | None = (
+        None  # High-resolution frequency (when precision mode enabled)
+    )
+    precision_cents: float | None = None  # High-resolution cents deviation
 
 
 @dataclass
 class PrecisionInfo:
     """Information about precision detection state."""
+
     enabled: bool = False
-    fill_level: float = 0.0      # Buffer fill level (0.0 to 1.0)
-    resolution: float = 0.0      # Current frequency resolution in Hz
-    duration: float = 0.0        # Duration of accumulated audio in seconds
-    is_stable: bool = False      # True if buffer is full enough for reliable measurement
+    fill_level: float = 0.0  # Buffer fill level (0.0 to 1.0)
+    resolution: float = 0.0  # Current frequency resolution in Hz
+    duration: float = 0.0  # Duration of accumulated audio in seconds
+    is_stable: bool = False  # True if buffer is full enough for reliable measurement
 
 
 @dataclass
 class AccordionResult:
     """Result of accordion reed detection."""
+
     valid: bool = False
-    note_name: str = ""         # e.g., "C"
-    octave: int = 0             # e.g., 4
+    note_name: str = ""  # e.g., "C"
+    octave: int = 0  # e.g., 4
     ref_frequency: float = 0.0  # Reference frequency for this note
     reeds: list[ReedInfo] = field(default_factory=list)
     beat_frequencies: list[float] = field(default_factory=list)  # |f1-f2|, |f2-f3|, etc.
@@ -310,9 +316,7 @@ class AccordionDetector:
             Smoothed reed measurements
         """
         # Prepare measurements for smoother
-        measurements = [
-            (r.frequency, r.cents, r.magnitude) for r in reeds
-        ]
+        measurements = [(r.frequency, r.cents, r.magnitude) for r in reeds]
 
         # Update smoother and get smoothed results
         smoothed_results = self._smoother.update(note_name, octave, measurements)
@@ -392,12 +396,14 @@ class AccordionDetector:
             if abs(cents_from_ref) > self.reed_spread_cents:
                 continue
 
-            reeds.append(ReedInfo(
-                frequency=m.frequency,
-                cents=cents_from_ref,
-                magnitude=m.magnitude,
-                target_cents=None,  # Will be computed after sorting
-            ))
+            reeds.append(
+                ReedInfo(
+                    frequency=m.frequency,
+                    cents=cents_from_ref,
+                    magnitude=m.magnitude,
+                    target_cents=None,  # Will be computed after sorting
+                )
+            )
 
         # Sort by frequency
         reeds.sort(key=lambda r: r.frequency)
@@ -492,8 +498,7 @@ class AccordionDetector:
             Tuple of (updated reeds with precision data, precision info)
         """
         # Check for note change - reset buffer if note changed
-        if (self._precision_current_note != note_name or
-                self._precision_current_octave != octave):
+        if self._precision_current_note != note_name or self._precision_current_octave != octave:
             self._precision_buffer.clear()
             self._precision_current_note = note_name
             self._precision_current_octave = octave
@@ -518,9 +523,7 @@ class AccordionDetector:
                 reed.precision_frequency = precision_freqs[i]
                 # Calculate precision cents
                 if ref_frequency > 0:
-                    reed.precision_cents = 1200 * np.log2(
-                        precision_freqs[i] / ref_frequency
-                    )
+                    reed.precision_cents = 1200 * np.log2(precision_freqs[i] / ref_frequency)
 
         return reeds, precision_info
 
@@ -590,10 +593,10 @@ class AccordionDetector:
         for i in range(1, len(search_mags) - 1):
             if search_mags[i] < threshold:
                 continue
-            if search_mags[i] > search_mags[i-1] and search_mags[i] > search_mags[i+1]:
+            if search_mags[i] > search_mags[i - 1] and search_mags[i] > search_mags[i + 1]:
                 # Parabolic interpolation for sub-bin accuracy
-                y1, y2, y3 = search_mags[i-1], search_mags[i], search_mags[i+1]
-                denom = y1 - 2*y2 + y3
+                y1, y2, y3 = search_mags[i - 1], search_mags[i], search_mags[i + 1]
+                denom = y1 - 2 * y2 + y3
                 if abs(denom) > 1e-10:
                     delta = 0.5 * (y1 - y3) / denom
                     freq_step = search_freqs[1] - search_freqs[0]
@@ -624,7 +627,7 @@ class AccordionDetector:
 
             # Find closest unused peak within ±5 Hz
             best_peak = None
-            best_dist = float('inf')
+            best_dist = float("inf")
 
             for i, (peak_freq, _peak_mag) in enumerate(all_peaks):
                 if i in used_peaks:
@@ -645,7 +648,7 @@ class AccordionDetector:
         buffer_len = len(self._precision_buffer)
         fill_level = buffer_len / self._precision_buffer_size
         duration = buffer_len / self.sample_rate
-        resolution = self.sample_rate / buffer_len if buffer_len > 0 else float('inf')
+        resolution = self.sample_rate / buffer_len if buffer_len > 0 else float("inf")
         is_stable = fill_level >= self._precision_stable_threshold
 
         return PrecisionInfo(
@@ -764,10 +767,6 @@ class AccordionDetector:
             profile: TremoloProfile to use, or None to disable
         """
         self._tremolo_profile = profile
-
-    def set_downsample(self, enabled: bool):
-        """Enable/disable downsampling for better low frequency detection."""
-        self._detector.set_downsample(enabled)
 
     # ESPRIT-specific settings (only effective when using ESPRIT detector)
     def set_esprit_width_threshold(self, threshold: float):
@@ -974,7 +973,7 @@ class AccordionDetector:
         """Get current frequency resolution in Hz based on buffer fill."""
         buffer_len = len(self._precision_buffer)
         if buffer_len == 0:
-            return float('inf')
+            return float("inf")
         return self.sample_rate / buffer_len
 
     def reset_precision(self):

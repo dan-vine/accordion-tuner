@@ -308,3 +308,40 @@ class TestMusicalNotes:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestEspritSettings:
+    """Test ESPRIT detector settings."""
+
+    def setup_method(self):
+        from accordion_tuner.esprit_detector import EspritPitchDetector
+
+        self.detector = EspritPitchDetector()
+
+    def test_temperament_default(self):
+        """Test that equal temperament is the default."""
+        assert self.detector.temperament == Temperament.EQUAL
+
+    def test_temperament_setting(self):
+        """Test setting a different temperament."""
+        self.detector.set_temperament(Temperament.PYTHAGOREAN)
+        assert self.detector.temperament == Temperament.PYTHAGOREAN
+
+    def test_key_setting(self):
+        """Test key setting."""
+        self.detector.set_key(2)  # D
+        assert self.detector.key == 2
+
+    def test_octave_filter_setting(self):
+        """Test octave filter setting."""
+        self.detector.set_octave_filter(True)
+        assert self.detector.octave_filter is True
+        self.detector.set_octave_filter(False)
+        assert self.detector.octave_filter is False
+
+    def test_fundamental_filter_setting(self):
+        """Test fundamental filter setting."""
+        self.detector.set_fundamental_filter(True)
+        assert self.detector.fundamental_filter is True
+        self.detector.set_fundamental_filter(False)
+        assert self.detector.fundamental_filter is False

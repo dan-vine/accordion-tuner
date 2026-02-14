@@ -62,35 +62,34 @@ class AccordionWindow(QMainWindow):
 
     # Default settings values
     DEFAULTS = {
-        'num_reeds': 3,
-        'reference': 440.0,
-        'algorithm': 0,  # 0=FFT, 1=MUSIC, 2=ESPRIT
-        'octave_filter': True,
-        'fundamental_filter': False,
-        'downsample': False,
-        'sensitivity': 10,
-        'reed_spread': 50,
-        'peak_threshold': 25,  # 25% of max peak
-        'temperament': 8,  # Equal
-        'key': 0,  # C
-        'transpose': 0,
-        'zoom_spectrum': True,
-        'hold_mode': False,
-        'settings_expanded': False,
-        'tremolo_profile_path': '',  # Path to last loaded profile
+        "num_reeds": 3,
+        "reference": 440.0,
+        "algorithm": 0,  # 0=FFT, 1=MUSIC, 2=ESPRIT
+        "octave_filter": True,
+        "fundamental_filter": False,
+        "sensitivity": 10,
+        "reed_spread": 50,
+        "peak_threshold": 25,  # 25% of max peak
+        "temperament": 8,  # Equal
+        "key": 0,  # C
+        "transpose": 0,
+        "zoom_spectrum": True,
+        "hold_mode": False,
+        "settings_expanded": False,
+        "tremolo_profile_path": "",  # Path to last loaded profile
         # ESPRIT-specific settings
-        'esprit_width': 25,  # 0.25
-        'esprit_separation': 50,  # 0.50 Hz
-        'esprit_offsets': 0,  # Default offsets preset
+        "esprit_width": 25,  # 0.25
+        "esprit_separation": 50,  # 0.50 Hz
+        "esprit_offsets": 0,  # Default offsets preset
         # SimpleFFT-specific settings
-        'simple_fft_search': 30,  # 3.0 Hz
-        'simple_fft_threshold': 10,  # 0.10 (10%)
+        "simple_fft_search": 30,  # 3.0 Hz
+        "simple_fft_threshold": 10,  # 0.10 (10%)
         # Smoothing settings
-        'smoothing_enabled': True,
-        'smoothing_window': 20,  # samples (~2 seconds at 10 Hz)
+        "smoothing_enabled": True,
+        "smoothing_window": 20,  # samples (~2 seconds at 10 Hz)
         # Precision mode settings
-        'precision_enabled': True,
-        'precision_window': 30,  # 3.0 seconds
+        "precision_enabled": True,
+        "precision_window": 30,  # 3.0 seconds
     }
 
     def __init__(self):
@@ -363,12 +362,6 @@ class AccordionWindow(QMainWindow):
         self._fundamental_filter_cb.stateChanged.connect(self._on_fundamental_filter_changed)
         checkbox_row.addWidget(self._fundamental_filter_cb)
 
-        self._downsample_cb = QCheckBox("Downsample")
-        self._downsample_cb.setToolTip("Better low frequency detection (FFT algorithm only)")
-        self._downsample_cb.setChecked(False)
-        self._downsample_cb.stateChanged.connect(self._on_downsample_changed)
-        checkbox_row.addWidget(self._downsample_cb)
-
         checkbox_row.addStretch()
         detection_layout.addLayout(checkbox_row)
 
@@ -484,8 +477,7 @@ class AccordionWindow(QMainWindow):
         self._precision_slider.setValue(30)  # 3.0 seconds default
         self._precision_slider.setMinimumWidth(100)
         self._precision_slider.setToolTip(
-            "Precision mode accumulation window.\n"
-            "2s = 0.5 Hz resolution, 4s = 0.25 Hz resolution"
+            "Precision mode accumulation window.\n2s = 0.5 Hz resolution, 4s = 0.25 Hz resolution"
         )
         self._precision_slider.valueChanged.connect(self._on_precision_window_changed)
         prec_window_layout.addWidget(self._precision_slider)
@@ -568,16 +560,17 @@ class AccordionWindow(QMainWindow):
         offset_layout.addWidget(QLabel("Candidate Offsets:"))
         self._esprit_offsets_combo = QComboBox()
         self._esprit_offsets_combo.setFixedWidth(180)
-        self._esprit_offsets_combo.addItems([
-            "±0.4, ±0.8 Hz (default)",
-            "±0.3, ±0.6 Hz (tighter)",
-            "±0.5, ±1.0 Hz (wider)",
-            "±0.4, ±0.8, ±1.2 Hz (extended)",
-            "None (disable)"
-        ])
+        self._esprit_offsets_combo.addItems(
+            [
+                "±0.4, ±0.8 Hz (default)",
+                "±0.3, ±0.6 Hz (tighter)",
+                "±0.5, ±1.0 Hz (wider)",
+                "±0.4, ±0.8, ±1.2 Hz (extended)",
+                "None (disable)",
+            ]
+        )
         self._esprit_offsets_combo.setToolTip(
-            "Frequency offsets added around merged peaks.\n"
-            "Helps ESPRIT resolve close frequencies."
+            "Frequency offsets added around merged peaks.\nHelps ESPRIT resolve close frequencies."
         )
         self._esprit_offsets_combo.currentIndexChanged.connect(self._on_esprit_offsets_changed)
         offset_layout.addWidget(self._esprit_offsets_combo)
@@ -642,7 +635,9 @@ class AccordionWindow(QMainWindow):
             "Lower = more sensitive to second reed.\n"
             "Higher = fewer false positives."
         )
-        self._simple_fft_threshold_slider.valueChanged.connect(self._on_simple_fft_threshold_changed)
+        self._simple_fft_threshold_slider.valueChanged.connect(
+            self._on_simple_fft_threshold_changed
+        )
         threshold_layout.addWidget(self._simple_fft_threshold_slider)
         self._simple_fft_threshold_value = QLabel("10%")
         self._simple_fft_threshold_value.setFixedWidth(35)
@@ -672,14 +667,38 @@ class AccordionWindow(QMainWindow):
         self._temperament_combo = QComboBox()
         self._temperament_combo.setFixedWidth(140)
         temperament_names = [
-            "Kirnberger I", "Kirnberger II", "Kirnberger III",
-            "Werckmeister III", "Werckmeister IV", "Werckmeister V", "Werckmeister VI",
-            "Bach-Lehman", "Equal", "Pythagorean", "Just",
-            "Meantone", "Meantone 1/4", "Meantone 1/5", "Meantone 1/6",
-            "Silbermann", "Salinas", "Zarlino", "Rossi", "Rossi 2",
-            "Vallotti", "Young", "Kellner", "Held",
-            "Neidhardt I", "Neidhardt II", "Neidhardt III",
-            "Bruder 1829", "Barnes", "Prelleur", "Chaumont", "Rameau"
+            "Kirnberger I",
+            "Kirnberger II",
+            "Kirnberger III",
+            "Werckmeister III",
+            "Werckmeister IV",
+            "Werckmeister V",
+            "Werckmeister VI",
+            "Bach-Lehman",
+            "Equal",
+            "Pythagorean",
+            "Just",
+            "Meantone",
+            "Meantone 1/4",
+            "Meantone 1/5",
+            "Meantone 1/6",
+            "Silbermann",
+            "Salinas",
+            "Zarlino",
+            "Rossi",
+            "Rossi 2",
+            "Vallotti",
+            "Young",
+            "Kellner",
+            "Held",
+            "Neidhardt I",
+            "Neidhardt II",
+            "Neidhardt III",
+            "Bruder 1829",
+            "Barnes",
+            "Prelleur",
+            "Chaumont",
+            "Rameau",
         ]
         self._temperament_combo.addItems(temperament_names)
         self._temperament_combo.setCurrentIndex(Temperament.EQUAL)
@@ -814,8 +833,8 @@ class AccordionWindow(QMainWindow):
         try:
             devices = sd.query_devices()
             for i, device in enumerate(devices):
-                if device['max_input_channels'] > 0:
-                    name = device['name']
+                if device["max_input_channels"] > 0:
+                    name = device["name"]
                     self._input_combo.addItem(name, i)
         except Exception:
             pass
@@ -876,11 +895,11 @@ class AccordionWindow(QMainWindow):
     def _on_esprit_offsets_changed(self, index: int):
         """Handle ESPRIT candidate offsets combo change."""
         offset_presets = [
-            [-0.8, -0.4, 0.4, 0.8],          # default
-            [-0.6, -0.3, 0.3, 0.6],          # tighter
-            [-1.0, -0.5, 0.5, 1.0],          # wider
+            [-0.8, -0.4, 0.4, 0.8],  # default
+            [-0.6, -0.3, 0.3, 0.6],  # tighter
+            [-1.0, -0.5, 0.5, 1.0],  # wider
             [-1.2, -0.8, -0.4, 0.4, 0.8, 1.2],  # extended
-            [],                               # none
+            [],  # none
         ]
         if index < len(offset_presets):
             self._detector.set_esprit_candidate_offsets(offset_presets[index])
@@ -904,10 +923,6 @@ class AccordionWindow(QMainWindow):
     def _on_fundamental_filter_changed(self, state):
         """Handle fundamental filter checkbox change."""
         self._detector.set_fundamental_filter(self._fundamental_filter_cb.isChecked())
-
-    def _on_downsample_changed(self, state):
-        """Handle downsample checkbox change."""
-        self._detector.set_downsample(self._downsample_cb.isChecked())
 
     def _on_sensitivity_changed(self, value: int):
         """Handle sensitivity slider change."""
@@ -989,7 +1004,9 @@ class AccordionWindow(QMainWindow):
             self._loaded_profiles[profile.name] = profile
 
             # Add to combo if not already present
-            existing_items = [self._profile_combo.itemText(i) for i in range(self._profile_combo.count())]
+            existing_items = [
+                self._profile_combo.itemText(i) for i in range(self._profile_combo.count())
+            ]
             if profile.name not in existing_items:
                 self._profile_combo.addItem(profile.name)
 
@@ -1122,7 +1139,7 @@ class AccordionWindow(QMainWindow):
 
         # Calculate audio levels for meter (on pre-gain signal for accurate metering)
         raw_audio = indata[:, 0]
-        self._audio_rms = float(np.sqrt(np.mean(raw_audio ** 2)))
+        self._audio_rms = float(np.sqrt(np.mean(raw_audio**2)))
         self._audio_peak = float(np.max(np.abs(raw_audio)))
 
         # Process with detector
@@ -1320,15 +1337,15 @@ class AccordionWindow(QMainWindow):
         settings = QSettings("accordion-tuner", "AccordionTuner")
 
         # Number of reeds
-        num_reeds = settings.value("num_reeds", self.DEFAULTS['num_reeds'], type=int)
+        num_reeds = settings.value("num_reeds", self.DEFAULTS["num_reeds"], type=int)
         self._reeds_combo.setCurrentIndex(num_reeds - 1)
 
         # Reference frequency
-        reference = settings.value("reference", self.DEFAULTS['reference'], type=float)
+        reference = settings.value("reference", self.DEFAULTS["reference"], type=float)
         self._ref_spinbox.setValue(reference)
 
         # Detection settings
-        algorithm = settings.value("algorithm", self.DEFAULTS['algorithm'], type=int)
+        algorithm = settings.value("algorithm", self.DEFAULTS["algorithm"], type=int)
         # Migrate old settings: 0=FFT, 1=MUSIC(removed)->FFT, 2=ESPRIT->1
         if algorithm == 2:
             algorithm = 1  # ESPRIT is now index 1
@@ -1336,32 +1353,33 @@ class AccordionWindow(QMainWindow):
             algorithm = 0  # MUSIC removed, fall back to FFT
         self._algorithm_combo.setCurrentIndex(algorithm)
 
-        octave_filter = settings.value("octave_filter", self.DEFAULTS['octave_filter'], type=bool)
+        octave_filter = settings.value("octave_filter", self.DEFAULTS["octave_filter"], type=bool)
         self._octave_filter_cb.setChecked(octave_filter)
 
-        fundamental_filter = settings.value("fundamental_filter", self.DEFAULTS['fundamental_filter'], type=bool)
+        fundamental_filter = settings.value(
+            "fundamental_filter", self.DEFAULTS["fundamental_filter"], type=bool
+        )
         self._fundamental_filter_cb.setChecked(fundamental_filter)
 
-        downsample = settings.value("downsample", self.DEFAULTS['downsample'], type=bool)
-        self._downsample_cb.setChecked(downsample)
-
-        sensitivity = settings.value("sensitivity", self.DEFAULTS['sensitivity'], type=int)
+        sensitivity = settings.value("sensitivity", self.DEFAULTS["sensitivity"], type=int)
         self._sensitivity_slider.setValue(sensitivity)
 
-        reed_spread = settings.value("reed_spread", self.DEFAULTS['reed_spread'], type=int)
+        reed_spread = settings.value("reed_spread", self.DEFAULTS["reed_spread"], type=int)
         self._reed_spread_slider.setValue(reed_spread)
 
-        peak_threshold = settings.value("peak_threshold", self.DEFAULTS['peak_threshold'], type=int)
+        peak_threshold = settings.value("peak_threshold", self.DEFAULTS["peak_threshold"], type=int)
         self._peak_threshold_slider.setValue(peak_threshold)
 
         # ESPRIT settings
-        esprit_width = settings.value("esprit_width", self.DEFAULTS['esprit_width'], type=int)
+        esprit_width = settings.value("esprit_width", self.DEFAULTS["esprit_width"], type=int)
         self._esprit_width_slider.setValue(esprit_width)
 
-        esprit_separation = settings.value("esprit_separation", self.DEFAULTS['esprit_separation'], type=int)
+        esprit_separation = settings.value(
+            "esprit_separation", self.DEFAULTS["esprit_separation"], type=int
+        )
         self._esprit_sep_slider.setValue(esprit_separation)
 
-        esprit_offsets = settings.value("esprit_offsets", self.DEFAULTS['esprit_offsets'], type=int)
+        esprit_offsets = settings.value("esprit_offsets", self.DEFAULTS["esprit_offsets"], type=int)
         self._esprit_offsets_combo.setCurrentIndex(esprit_offsets)
 
         # Show ESPRIT frame if ESPRIT is selected
@@ -1369,10 +1387,14 @@ class AccordionWindow(QMainWindow):
             self._esprit_frame.setVisible(True)
 
         # SimpleFFT settings
-        simple_fft_search = settings.value("simple_fft_search", self.DEFAULTS['simple_fft_search'], type=int)
+        simple_fft_search = settings.value(
+            "simple_fft_search", self.DEFAULTS["simple_fft_search"], type=int
+        )
         self._simple_fft_search_slider.setValue(simple_fft_search)
 
-        simple_fft_threshold = settings.value("simple_fft_threshold", self.DEFAULTS['simple_fft_threshold'], type=int)
+        simple_fft_threshold = settings.value(
+            "simple_fft_threshold", self.DEFAULTS["simple_fft_threshold"], type=int
+        )
         self._simple_fft_threshold_slider.setValue(simple_fft_threshold)
 
         # Show SimpleFFT frame if SimpleFFT is selected
@@ -1380,39 +1402,49 @@ class AccordionWindow(QMainWindow):
             self._simple_fft_frame.setVisible(True)
 
         # Smoothing settings
-        smoothing_enabled = settings.value("smoothing_enabled", self.DEFAULTS['smoothing_enabled'], type=bool)
+        smoothing_enabled = settings.value(
+            "smoothing_enabled", self.DEFAULTS["smoothing_enabled"], type=bool
+        )
         self._smoothing_cb.setChecked(smoothing_enabled)
         self._smoothing_slider.setEnabled(smoothing_enabled)
 
-        smoothing_window = settings.value("smoothing_window", self.DEFAULTS['smoothing_window'], type=int)
+        smoothing_window = settings.value(
+            "smoothing_window", self.DEFAULTS["smoothing_window"], type=int
+        )
         self._smoothing_slider.setValue(smoothing_window)
 
         # Precision mode settings
-        precision_enabled = settings.value("precision_enabled", self.DEFAULTS['precision_enabled'], type=bool)
+        precision_enabled = settings.value(
+            "precision_enabled", self.DEFAULTS["precision_enabled"], type=bool
+        )
         self._precision_cb.setChecked(precision_enabled)
         self._precision_slider.setEnabled(precision_enabled)
 
-        precision_window = settings.value("precision_window", self.DEFAULTS['precision_window'], type=int)
+        precision_window = settings.value(
+            "precision_window", self.DEFAULTS["precision_window"], type=int
+        )
         self._precision_slider.setValue(precision_window)
 
         # Tuning settings
-        temperament = settings.value("temperament", self.DEFAULTS['temperament'], type=int)
+        temperament = settings.value("temperament", self.DEFAULTS["temperament"], type=int)
         self._temperament_combo.setCurrentIndex(temperament)
 
-        key = settings.value("key", self.DEFAULTS['key'], type=int)
+        key = settings.value("key", self.DEFAULTS["key"], type=int)
         self._key_combo.setCurrentIndex(key)
 
-        transpose = settings.value("transpose", self.DEFAULTS['transpose'], type=int)
+        transpose = settings.value("transpose", self.DEFAULTS["transpose"], type=int)
         self._transpose_spin.setValue(transpose)
 
         # Display settings
-        zoom_spectrum = settings.value("zoom_spectrum", self.DEFAULTS['zoom_spectrum'], type=bool)
+        zoom_spectrum = settings.value("zoom_spectrum", self.DEFAULTS["zoom_spectrum"], type=bool)
         self._zoom_spectrum_cb.setChecked(zoom_spectrum)
 
-        hold_mode = settings.value("hold_mode", self.DEFAULTS['hold_mode'], type=bool)
+        hold_mode = settings.value("hold_mode", self.DEFAULTS["hold_mode"], type=bool)
         self._hold_mode_cb.setChecked(hold_mode)
 
-        settings_expanded = settings.value("settings_expanded", self.DEFAULTS['settings_expanded'], type=bool)
+        settings_expanded = settings.value(
+            "settings_expanded", self.DEFAULTS["settings_expanded"], type=bool
+        )
         if settings_expanded:
             self._settings_toggle.setChecked(True)
             self._toggle_settings(True)
@@ -1426,7 +1458,9 @@ class AccordionWindow(QMainWindow):
                     break
 
         # Tremolo profile
-        profile_path = settings.value("tremolo_profile_path", self.DEFAULTS['tremolo_profile_path'], type=str)
+        profile_path = settings.value(
+            "tremolo_profile_path", self.DEFAULTS["tremolo_profile_path"], type=str
+        )
         if profile_path:
             try:
                 profile = load_profile(profile_path)
@@ -1455,7 +1489,6 @@ class AccordionWindow(QMainWindow):
         settings.setValue("algorithm", self._algorithm_combo.currentIndex())
         settings.setValue("octave_filter", self._octave_filter_cb.isChecked())
         settings.setValue("fundamental_filter", self._fundamental_filter_cb.isChecked())
-        settings.setValue("downsample", self._downsample_cb.isChecked())
         settings.setValue("sensitivity", self._sensitivity_slider.value())
         settings.setValue("reed_spread", self._reed_spread_slider.value())
         settings.setValue("peak_threshold", self._peak_threshold_slider.value())
@@ -1506,7 +1539,7 @@ class AccordionWindow(QMainWindow):
             "Reset to Defaults",
             "Are you sure you want to reset all settings to their default values?",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
@@ -1516,29 +1549,28 @@ class AccordionWindow(QMainWindow):
         settings.clear()
 
         # Reset all widgets to defaults (this triggers their change handlers)
-        self._reeds_combo.setCurrentIndex(self.DEFAULTS['num_reeds'] - 1)
-        self._ref_spinbox.setValue(self.DEFAULTS['reference'])
-        self._algorithm_combo.setCurrentIndex(self.DEFAULTS['algorithm'])
-        self._octave_filter_cb.setChecked(self.DEFAULTS['octave_filter'])
-        self._fundamental_filter_cb.setChecked(self.DEFAULTS['fundamental_filter'])
-        self._downsample_cb.setChecked(self.DEFAULTS['downsample'])
-        self._sensitivity_slider.setValue(self.DEFAULTS['sensitivity'])
-        self._reed_spread_slider.setValue(self.DEFAULTS['reed_spread'])
-        self._peak_threshold_slider.setValue(self.DEFAULTS['peak_threshold'])
-        self._esprit_width_slider.setValue(self.DEFAULTS['esprit_width'])
-        self._esprit_sep_slider.setValue(self.DEFAULTS['esprit_separation'])
-        self._esprit_offsets_combo.setCurrentIndex(self.DEFAULTS['esprit_offsets'])
-        self._simple_fft_search_slider.setValue(self.DEFAULTS['simple_fft_search'])
-        self._simple_fft_threshold_slider.setValue(self.DEFAULTS['simple_fft_threshold'])
-        self._smoothing_cb.setChecked(self.DEFAULTS['smoothing_enabled'])
-        self._smoothing_slider.setValue(self.DEFAULTS['smoothing_window'])
-        self._precision_cb.setChecked(self.DEFAULTS['precision_enabled'])
-        self._precision_slider.setValue(self.DEFAULTS['precision_window'])
-        self._temperament_combo.setCurrentIndex(self.DEFAULTS['temperament'])
-        self._key_combo.setCurrentIndex(self.DEFAULTS['key'])
-        self._transpose_spin.setValue(self.DEFAULTS['transpose'])
-        self._zoom_spectrum_cb.setChecked(self.DEFAULTS['zoom_spectrum'])
-        self._hold_mode_cb.setChecked(self.DEFAULTS['hold_mode'])
+        self._reeds_combo.setCurrentIndex(self.DEFAULTS["num_reeds"] - 1)
+        self._ref_spinbox.setValue(self.DEFAULTS["reference"])
+        self._algorithm_combo.setCurrentIndex(self.DEFAULTS["algorithm"])
+        self._octave_filter_cb.setChecked(self.DEFAULTS["octave_filter"])
+        self._fundamental_filter_cb.setChecked(self.DEFAULTS["fundamental_filter"])
+        self._sensitivity_slider.setValue(self.DEFAULTS["sensitivity"])
+        self._reed_spread_slider.setValue(self.DEFAULTS["reed_spread"])
+        self._peak_threshold_slider.setValue(self.DEFAULTS["peak_threshold"])
+        self._esprit_width_slider.setValue(self.DEFAULTS["esprit_width"])
+        self._esprit_sep_slider.setValue(self.DEFAULTS["esprit_separation"])
+        self._esprit_offsets_combo.setCurrentIndex(self.DEFAULTS["esprit_offsets"])
+        self._simple_fft_search_slider.setValue(self.DEFAULTS["simple_fft_search"])
+        self._simple_fft_threshold_slider.setValue(self.DEFAULTS["simple_fft_threshold"])
+        self._smoothing_cb.setChecked(self.DEFAULTS["smoothing_enabled"])
+        self._smoothing_slider.setValue(self.DEFAULTS["smoothing_window"])
+        self._precision_cb.setChecked(self.DEFAULTS["precision_enabled"])
+        self._precision_slider.setValue(self.DEFAULTS["precision_window"])
+        self._temperament_combo.setCurrentIndex(self.DEFAULTS["temperament"])
+        self._key_combo.setCurrentIndex(self.DEFAULTS["key"])
+        self._transpose_spin.setValue(self.DEFAULTS["transpose"])
+        self._zoom_spectrum_cb.setChecked(self.DEFAULTS["zoom_spectrum"])
+        self._hold_mode_cb.setChecked(self.DEFAULTS["hold_mode"])
         self._input_combo.setCurrentIndex(0)  # Default device
 
         # Clear tremolo profiles
@@ -1556,13 +1588,13 @@ def main():
     app.setStyle("Fusion")  # Use Fusion style for consistent cross-platform look
 
     # Set application icon (handles both dev and PyInstaller bundled paths)
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         # Running as PyInstaller bundle
         base_path = sys._MEIPASS
     else:
         # Running in development
         base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    icon_path = os.path.join(base_path, 'assets', 'icon.png')
+    icon_path = os.path.join(base_path, "assets", "icon.png")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
 

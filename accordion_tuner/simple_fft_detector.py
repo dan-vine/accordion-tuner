@@ -32,9 +32,11 @@ class SimpleFftPeakDetector:
         self,
         sample_rate: int = SAMPLE_RATE,
         reference: float = A4_REFERENCE,
-        fft_size: int = 16384,
+        fft_size: int = 32768,
         hop_size: int = 1024,
         num_sources: int = 4,
+        second_reed_search_hz: float = 3.0,
+        second_reed_threshold: float = 0.10,
     ):
         """
         Initialize detector.
@@ -45,12 +47,16 @@ class SimpleFftPeakDetector:
             fft_size: FFT window size (larger = more resolution)
             hop_size: Hop size between frames
             num_sources: Maximum number of peaks to detect
+            second_reed_search_hz: Search range for second reed (±Hz)
+            second_reed_threshold: Lower threshold for second reed search
         """
         self.sample_rate = sample_rate
         self.reference = reference
         self.fft_size = fft_size
         self.hop_size = hop_size
         self.num_sources = num_sources
+        self.second_reed_search_hz = second_reed_search_hz
+        self.second_reed_threshold = second_reed_threshold
 
         self._buffer = np.zeros(fft_size, dtype=np.float64)
         self._window = np.hamming(fft_size)
@@ -82,6 +88,10 @@ class SimpleFftPeakDetector:
 
     def set_key(self, key: int):
         pass
+
+    def set_second_reed_search(self, hz: float, threshold: float = 0.10):
+        self.second_reed_search_hz = hz
+        self.second_reed_threshold = threshold
 
     def reset(self):
         self._buffer = np.zeros(self.fft_size, dtype=np.float64)
@@ -137,6 +147,10 @@ class SimpleFftPeakDetector:
 
         peaks = np.sort(peaks)
 
+        # Pass 1: Find peaks with 25% threshold (like FFT)
+        max_mag = np.max(mags_valid)
+        min_magnitude = max_mag * 0.25
+
         maxima = []
         first_note = None
         first_freq = None
@@ -182,6 +196,64 @@ class SimpleFftPeakDetector:
                     magnitude=mag,
                 )
             )
+
+        # Pass 2: Look for additional reed near the first using lower threshold
+        # Only look for reeds that are at least 0.8 Hz away from the first (to avoid noise)
+        if len(maxima) > 0 and len(maxima) < self.num_sources and self.second_reed_search_hz > 0:
+            first_freq = maxima[0].frequency
+            # Search from 0.8 Hz away up to search_hz from first
+            search_min = first_freq + 0.8
+            search_max = first_freq + self.second_reed_search_hz
+            
+            second_threshold = max_mag * self.second_reed_threshold
+            
+            # Find peaks in the search range with lower threshold
+            search_mask = (freqs_valid >= search_min) & (freqs_valid <= search_max)
+            search_freqs = freqs_valid[search_mask]
+            search_mags = mags_valid[search_mask]
+            
+            # Find the strongest peak in this range
+            if len(search_mags) > 0:
+                best_idx = np.argmax(search_mags)
+                best_freq = search_freqs[best_idx]
+                best_mag = search_mags[best_idx]
+                
+                if best_mag >= second_threshold:
+                    # Verify it's a local maximum
+                    is_peak = True
+                    if best_idx > 0 and search_mags[best_idx] <= search_mags[best_idx - 1]:
+                        is_peak = False
+                    if best_idx < len(search_mags) - 1 and search_mags[best_idx] <= search_mags[best_idx + 1]:
+                        is_peak = False
+                    
+                    if is_peak:
+                        freq = best_freq
+                        mag = best_mag
+                        
+                        # Parabolic interpolation
+                        if best_idx > 0 and best_idx < len(search_mags) - 1:
+                            y1, y2, y3 = search_mags[best_idx-1], search_mags[best_idx], search_mags[best_idx+1]
+                            denom = y1 - 2*y2 + y3
+                            if abs(denom) > 1e-10:
+                                delta = 0.5 * (y1 - y3) / denom
+                                freq_step = search_freqs[1] - search_freqs[0]
+                                freq = search_freqs[best_idx] + delta * freq_step
+                        
+                        note, cents = self._frequency_to_note(freq)
+                        note_name, octave = self._note_number_to_name(note)
+                        note_ref_freq = self.reference * (2 ** ((note - 69) / 12))
+                        
+                        maxima.append(
+                            Maximum(
+                                frequency=freq,
+                                ref_frequency=note_ref_freq,
+                                note=note,
+                                cents=cents,
+                                note_name=note_name,
+                                octave=octave,
+                                magnitude=mag,
+                            )
+                        )
 
         primary = maxima[0] if maxima else Maximum()
         return MultiPitchResult(

@@ -829,6 +829,48 @@ class AccordionDetector:
             return self._detector.get_min_separation()
         return 0.5
 
+    # SimpleFFT-specific settings (only effective when using SimpleFFT detector)
+    def set_simple_fft_second_reed_search(self, hz: float):
+        """
+        Set SimpleFFT search range for second reed detection.
+
+        Only effective when using SimpleFFT detector.
+        After finding the first (fundamental) reed, this defines the maximum
+        Hz range above the fundamental to search for a second reed.
+
+        Args:
+            hz: Search range in Hz (1.0 to 8.0, default 3.0)
+        """
+        if isinstance(self._detector, SimpleFftPeakDetector):
+            self._detector.set_second_reed_search(hz)
+
+    def get_simple_fft_second_reed_search(self) -> float:
+        """Get SimpleFFT second reed search range (returns 3.0 if not using SimpleFFT)."""
+        if isinstance(self._detector, SimpleFftPeakDetector):
+            return self._detector.second_reed_search_hz
+        return 3.0
+
+    def set_simple_fft_second_reed_threshold(self, threshold: float):
+        """
+        Set SimpleFFT threshold for second reed detection.
+
+        Only effective when using SimpleFFT detector.
+        Lower threshold = more sensitive to second reed.
+        Higher threshold = fewer false positives.
+
+        Args:
+            threshold: Magnitude threshold ratio (0.05 to 0.25, default 0.10)
+        """
+        if isinstance(self._detector, SimpleFftPeakDetector):
+            search_hz = self._detector.second_reed_search_hz
+            self._detector.set_second_reed_search(search_hz, threshold)
+
+    def get_simple_fft_second_reed_threshold(self) -> float:
+        """Get SimpleFFT second reed threshold (returns 0.10 if not using SimpleFFT)."""
+        if isinstance(self._detector, SimpleFftPeakDetector):
+            return self._detector.second_reed_threshold
+        return 0.10
+
     def reset(self):
         """Reset internal state."""
         self._detector.reset()

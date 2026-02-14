@@ -82,6 +82,9 @@ class AccordionWindow(QMainWindow):
         'esprit_width': 25,  # 0.25
         'esprit_separation': 50,  # 0.50 Hz
         'esprit_offsets': 0,  # Default offsets preset
+        # SimpleFFT-specific settings
+        'simple_fft_search': 30,  # 3.0 Hz
+        'simple_fft_threshold': 10,  # 0.10 (10%)
         # Smoothing settings
         'smoothing_enabled': True,
         'smoothing_window': 20,  # samples (~2 seconds at 10 Hz)
@@ -332,7 +335,7 @@ class AccordionWindow(QMainWindow):
         algo_row.addWidget(QLabel("Algorithm:"))
         self._algorithm_combo = QComboBox()
         self._algorithm_combo.setFixedWidth(160)
-        self._algorithm_combo.addItems(["FFT (Phase Vocoder)", "ESPRIT"])
+        self._algorithm_combo.addItems(["FFT (Phase Vocoder)", "ESPRIT", "Simple FFT"])
         self._algorithm_combo.setCurrentIndex(0)
         self._algorithm_combo.setToolTip(
             "FFT: Fast, reliable detection using phase vocoder\n"
@@ -586,6 +589,72 @@ class AccordionWindow(QMainWindow):
         detection_layout.addWidget(self._esprit_frame)
         self._esprit_frame.setVisible(False)  # Hidden until ESPRIT selected
 
+        # SimpleFFT-specific options (visible only when SimpleFFT selected)
+        self._simple_fft_frame = QFrame()
+        self._simple_fft_frame.setObjectName("simpleFftFrame")
+        self._simple_fft_frame.setStyleSheet(f"""
+            QFrame#simpleFftFrame {{
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 4px;
+                padding: 5px;
+                margin-top: 5px;
+            }}
+        """)
+        simple_fft_layout = QVBoxLayout(self._simple_fft_frame)
+        simple_fft_layout.setSpacing(6)
+        simple_fft_layout.setContentsMargins(8, 8, 8, 8)
+
+        simple_fft_header = QLabel("Simple FFT Options (for close frequency detection)")
+        simple_fft_header.setStyleSheet("font-weight: bold;")
+        simple_fft_layout.addWidget(simple_fft_header)
+
+        simple_fft_row1 = QHBoxLayout()
+        simple_fft_row1.setSpacing(15)
+
+        # Second reed search range slider
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Second Reed Search:"))
+        self._simple_fft_search_slider = QSlider(Qt.Orientation.Horizontal)
+        self._simple_fft_search_slider.setRange(10, 80)  # 1.0 to 8.0 Hz
+        self._simple_fft_search_slider.setValue(30)  # 3.0 Hz default
+        self._simple_fft_search_slider.setMinimumWidth(80)
+        self._simple_fft_search_slider.setToolTip(
+            "Search range above fundamental for second reed.\n"
+            "Higher = can find more distant second reeds.\n"
+            "Lower = less false positives."
+        )
+        self._simple_fft_search_slider.valueChanged.connect(self._on_simple_fft_search_changed)
+        search_layout.addWidget(self._simple_fft_search_slider)
+        self._simple_fft_search_value = QLabel("3.0 Hz")
+        self._simple_fft_search_value.setFixedWidth(50)
+        search_layout.addWidget(self._simple_fft_search_value)
+        simple_fft_row1.addLayout(search_layout)
+
+        # Second reed threshold slider
+        threshold_layout = QHBoxLayout()
+        threshold_layout.addWidget(QLabel("Second Reed Threshold:"))
+        self._simple_fft_threshold_slider = QSlider(Qt.Orientation.Horizontal)
+        self._simple_fft_threshold_slider.setRange(5, 25)  # 0.05 to 0.25
+        self._simple_fft_threshold_slider.setValue(10)  # 0.10 default
+        self._simple_fft_threshold_slider.setMinimumWidth(80)
+        self._simple_fft_threshold_slider.setToolTip(
+            "Magnitude threshold for second reed detection.\n"
+            "Lower = more sensitive to second reed.\n"
+            "Higher = fewer false positives."
+        )
+        self._simple_fft_threshold_slider.valueChanged.connect(self._on_simple_fft_threshold_changed)
+        threshold_layout.addWidget(self._simple_fft_threshold_slider)
+        self._simple_fft_threshold_value = QLabel("10%")
+        self._simple_fft_threshold_value.setFixedWidth(35)
+        threshold_layout.addWidget(self._simple_fft_threshold_value)
+        simple_fft_row1.addLayout(threshold_layout)
+
+        simple_fft_row1.addStretch()
+        simple_fft_layout.addLayout(simple_fft_row1)
+
+        detection_layout.addWidget(self._simple_fft_frame)
+        self._simple_fft_frame.setVisible(False)  # Hidden until SimpleFFT selected
+
         tabs.addTab(detection_tab, "Detection")
 
         # === Tuning tab ===
@@ -769,6 +838,8 @@ class AccordionWindow(QMainWindow):
         """Handle algorithm combo change."""
         if index == 1:
             detector_type = DetectorType.ESPRIT
+        elif index == 2:
+            detector_type = DetectorType.SIMPLE_FFT
         else:
             detector_type = DetectorType.FFT
         self._detector.set_detector_type(detector_type)
@@ -776,11 +847,19 @@ class AccordionWindow(QMainWindow):
         # Show/hide ESPRIT options
         self._esprit_frame.setVisible(index == 1)
 
+        # Show/hide SimpleFFT options
+        self._simple_fft_frame.setVisible(index == 2)
+
         # Apply current ESPRIT settings when switching to ESPRIT
-        if index == 2:
+        if index == 1:
             self._on_esprit_width_changed(self._esprit_width_slider.value())
             self._on_esprit_sep_changed(self._esprit_sep_slider.value())
             self._on_esprit_offsets_changed(self._esprit_offsets_combo.currentIndex())
+
+        # Apply current SimpleFFT settings when switching to SimpleFFT
+        if index == 2:
+            self._on_simple_fft_search_changed(self._simple_fft_search_slider.value())
+            self._on_simple_fft_threshold_changed(self._simple_fft_threshold_slider.value())
 
     def _on_esprit_width_changed(self, value: int):
         """Handle ESPRIT width threshold slider change."""
@@ -805,6 +884,18 @@ class AccordionWindow(QMainWindow):
         ]
         if index < len(offset_presets):
             self._detector.set_esprit_candidate_offsets(offset_presets[index])
+
+    def _on_simple_fft_search_changed(self, value: int):
+        """Handle SimpleFFT second reed search range slider change."""
+        hz = value / 10.0
+        self._detector.set_simple_fft_second_reed_search(hz)
+        self._simple_fft_search_value.setText(f"{hz:.1f} Hz")
+
+    def _on_simple_fft_threshold_changed(self, value: int):
+        """Handle SimpleFFT second reed threshold slider change."""
+        threshold = value / 100.0
+        self._detector.set_simple_fft_second_reed_threshold(threshold)
+        self._simple_fft_threshold_value.setText(f"{value}%")
 
     def _on_octave_filter_changed(self, state):
         """Handle octave filter checkbox change."""
@@ -1277,6 +1368,17 @@ class AccordionWindow(QMainWindow):
         if algorithm == 1:
             self._esprit_frame.setVisible(True)
 
+        # SimpleFFT settings
+        simple_fft_search = settings.value("simple_fft_search", self.DEFAULTS['simple_fft_search'], type=int)
+        self._simple_fft_search_slider.setValue(simple_fft_search)
+
+        simple_fft_threshold = settings.value("simple_fft_threshold", self.DEFAULTS['simple_fft_threshold'], type=int)
+        self._simple_fft_threshold_slider.setValue(simple_fft_threshold)
+
+        # Show SimpleFFT frame if SimpleFFT is selected
+        if algorithm == 2:
+            self._simple_fft_frame.setVisible(True)
+
         # Smoothing settings
         smoothing_enabled = settings.value("smoothing_enabled", self.DEFAULTS['smoothing_enabled'], type=bool)
         self._smoothing_cb.setChecked(smoothing_enabled)
@@ -1363,6 +1465,10 @@ class AccordionWindow(QMainWindow):
         settings.setValue("esprit_separation", self._esprit_sep_slider.value())
         settings.setValue("esprit_offsets", self._esprit_offsets_combo.currentIndex())
 
+        # SimpleFFT settings
+        settings.setValue("simple_fft_search", self._simple_fft_search_slider.value())
+        settings.setValue("simple_fft_threshold", self._simple_fft_threshold_slider.value())
+
         # Smoothing settings
         settings.setValue("smoothing_enabled", self._smoothing_cb.isChecked())
         settings.setValue("smoothing_window", self._smoothing_slider.value())
@@ -1422,6 +1528,8 @@ class AccordionWindow(QMainWindow):
         self._esprit_width_slider.setValue(self.DEFAULTS['esprit_width'])
         self._esprit_sep_slider.setValue(self.DEFAULTS['esprit_separation'])
         self._esprit_offsets_combo.setCurrentIndex(self.DEFAULTS['esprit_offsets'])
+        self._simple_fft_search_slider.setValue(self.DEFAULTS['simple_fft_search'])
+        self._simple_fft_threshold_slider.setValue(self.DEFAULTS['simple_fft_threshold'])
         self._smoothing_cb.setChecked(self.DEFAULTS['smoothing_enabled'])
         self._smoothing_slider.setValue(self.DEFAULTS['smoothing_window'])
         self._precision_cb.setChecked(self.DEFAULTS['precision_enabled'])

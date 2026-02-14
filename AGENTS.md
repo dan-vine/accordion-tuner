@@ -18,31 +18,34 @@ accordion-tuner
 accordion-tuner-cli
 ```
 
-### Testing
+### Testing (Windows virtual environment)
 ```bash
 # Run all tests
-pytest
+.venv/Scripts/pytest.exe
 
 # Run single test file
-pytest tests/test_accordion.py
+.venv/Scripts/pytest.exe tests/test_accordion.py
 
 # Run single test (with full path)
-pytest tests/test_accordion.py::TestAccordionDetector::test_process_single_frequency -v
+.venv/Scripts/pytest.exe tests/test_accordion.py::TestAccordionDetector::test_process_single_frequency -v
 
 # Run tests with coverage
-pytest --cov=accordion_tuner
+.venv/Scripts/pytest.exe --cov=accordion_tuner
+
+# On Linux/Mac (if venv activated)
+pytest tests/test_accordion.py
 ```
 
 ### Linting
 ```bash
 # Lint all files
-ruff check .
+.venv/Scripts/ruff.exe check .
 
 # Lint and auto-fix
-ruff check --fix .
+.venv/Scripts/ruff.exe check --fix .
 
 # Format code
-ruff format .
+.venv/Scripts/ruff.exe format .
 ```
 
 ---
@@ -141,6 +144,11 @@ EspritPitchDetector (esprit_detector.py)
     - FFT-ESPRIT for super-resolution close-freq detection
     - Uses covariance matrix + eigenvalue decomposition
     ↓
+SimpleFftPeakDetector (simple_fft_detector.py)
+    - Simple FFT with scipy find_peaks
+    - Two-pass detection: fundamental + second reed search
+    - Zero-padding for higher resolution
+    ↓
 AccordionDetector (accordion.py)
     - Groups peaks into reeds for same note
     - Calculates beat frequencies
@@ -155,6 +163,7 @@ AccordionResult → GUI display
 |--------|---------|
 | `multi_pitch_detector.py` | FFT-based pitch detection |
 | `esprit_detector.py` | ESPRIT algorithm for close frequency resolution |
+| `simple_fft_detector.py` | Simple FFT with scipy find_peaks, two-pass detection |
 | `accordion.py` | Main detector orchestrating the pipeline |
 | `measurement_smoother.py` | Temporal smoothing for stable readings |
 | `tremolo_profile.py` | Tremolo beat frequency profiles |
@@ -200,12 +209,20 @@ class TestReedSmoother:
 
 ## Common Tasks
 
-### Adding a New Detector Setting
+### Adding a New Detector Setting (ESPRIT)
 1. Add to `EspritPitchDetector.__init__()` with default value
 2. Add getter/setter methods
 3. Add to `AccordionDetector` wrapper if needed
 4. Add GUI control in `accordion_window.py`
 5. Add to settings persistence in GUI
+
+### Adding a New Detector Setting (SimpleFFT)
+1. Add to `SimpleFftPeakDetector.__init__()` with default value
+2. Add setter method that updates instance variable
+3. Use the setting in `process()` method
+4. Add getter/setter to `AccordionDetector` (e.g., `set_simple_fft_xxx()`)
+5. Add GUI control in `accordion_window.py` (create frame like `_simple_fft_frame`)
+6. Add to settings persistence (save/load/defaults)
 
 ### Modifying the GUI
 1. Changes typically go in `accordion_window.py`

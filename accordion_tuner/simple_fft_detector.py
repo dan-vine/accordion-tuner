@@ -5,8 +5,6 @@ This detector uses scipy's find_peaks function for robust peak detection
 with zero-padding for higher frequency resolution.
 """
 
-from dataclasses import dataclass, field
-from typing import NamedTuple
 
 import numpy as np
 from scipy.signal import find_peaks
@@ -176,9 +174,9 @@ class SimpleFftPeakDetector:
                 first_note = note
                 first_freq = freq
             else:
-                if (note % 12) != (first_note % 12):
+                if self.fundamental_filter and (note % 12) != (first_note % 12):
                     continue
-                if freq > first_freq * 2:
+                if self.octave_filter and freq > first_freq * 2:
                     continue
 
             note_name, octave = self._note_number_to_name(note)
@@ -204,20 +202,20 @@ class SimpleFftPeakDetector:
             # Search from 0.8 Hz away up to search_hz from first
             search_min = first_freq + 0.8
             search_max = first_freq + self.second_reed_search_hz
-            
+
             second_threshold = max_mag * self.second_reed_threshold
-            
+
             # Find peaks in the search range with lower threshold
             search_mask = (freqs_valid >= search_min) & (freqs_valid <= search_max)
             search_freqs = freqs_valid[search_mask]
             search_mags = mags_valid[search_mask]
-            
+
             # Find the strongest peak in this range
             if len(search_mags) > 0:
                 best_idx = np.argmax(search_mags)
                 best_freq = search_freqs[best_idx]
                 best_mag = search_mags[best_idx]
-                
+
                 if best_mag >= second_threshold:
                     # Verify it's a local maximum
                     is_peak = True
@@ -225,11 +223,11 @@ class SimpleFftPeakDetector:
                         is_peak = False
                     if best_idx < len(search_mags) - 1 and search_mags[best_idx] <= search_mags[best_idx + 1]:
                         is_peak = False
-                    
+
                     if is_peak:
                         freq = best_freq
                         mag = best_mag
-                        
+
                         # Parabolic interpolation
                         if best_idx > 0 and best_idx < len(search_mags) - 1:
                             y1, y2, y3 = search_mags[best_idx-1], search_mags[best_idx], search_mags[best_idx+1]
@@ -238,11 +236,11 @@ class SimpleFftPeakDetector:
                                 delta = 0.5 * (y1 - y3) / denom
                                 freq_step = search_freqs[1] - search_freqs[0]
                                 freq = search_freqs[best_idx] + delta * freq_step
-                        
+
                         note, cents = self._frequency_to_note(freq)
                         note_name, octave = self._note_number_to_name(note)
                         note_ref_freq = self.reference * (2 ** ((note - 69) / 12))
-                        
+
                         maxima.append(
                             Maximum(
                                 frequency=freq,

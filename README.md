@@ -89,8 +89,8 @@ When SimpleFFT is selected, additional tuning options appear for fine-tuning clo
 
 **How SimpleFFT detects multiple reeds:**
 
-1. **Pass 1** - Uses FFT peak detection to find the primary peak above the threshold
-2. **Pass 2** - Searches bidirectionally (both lower and higher frequencies) around the primary peak to find additional reeds within the search range
+1. **Pass 1** - Uses FFT peak detection to find the loudest peaks above the threshold (up to the number of reeds you've configured)
+2. **Pass 2** - If you expect more reeds than Pass 1 found, it searches bidirectionally (±search range Hz) around the loudest detected reed with a lower threshold to find quieter close-frequency reeds
 
 This two-pass approach makes SimpleFFT particularly effective for very close reeds (<1 Hz apart). Best results require several seconds of stable signal to accumulate.
 

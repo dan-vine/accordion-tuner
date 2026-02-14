@@ -195,8 +195,8 @@ class EspritPitchDetector:
         # Convert to Maximum objects with note information
         maxima = []
         for freq, mag in zip(detected_freqs, magnitudes):
-            # Use lower threshold - AccordionDetector will filter by note proximity
-            if mag < self.min_magnitude / 20:
+            # Use user's sensitivity threshold
+            if mag < self.min_magnitude:
                 continue
 
             if freq <= 0:

@@ -32,20 +32,20 @@ def find_fundamental_frequency(
     max_freq: float = 2000.0
 ) -> float:
     """Find the fundamental frequency from spectrum, handling strong harmonics.
-    
+
     Strategy:
     1. Find all significant peaks (above threshold)
     2. Look for harmonic series (integer multiples)
     3. Return the lowest frequency with strong harmonics (fundamental)
     4. Fall back to strongest peak if no clear fundamental
-    
+
     Args:
         freqs: Frequency bins
         mags: Magnitudes
         threshold_ratio: Minimum peak magnitude as ratio of max
         min_freq: Minimum frequency to consider
         max_freq: Maximum frequency to consider
-        
+
     Returns:
         Fundamental frequency in Hz
     """
@@ -108,14 +108,14 @@ def find_fundamental_frequency(
 
 def extract_ground_truth_temporal(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> dict:
     """Extract ground truth frequencies from final 2 seconds using frame-based analysis.
-    
+
     Uses harmonic detection to find the fundamental frequency rather than
     just the strongest spectral peak (which may be a harmonic).
-    
+
     Args:
         audio: Audio recording
         sample_rate: Sample rate
-        
+
     Returns:
         Dictionary with frame-by-frame frequencies and statistics
     """
@@ -176,14 +176,14 @@ def analyze_detector_temporal(
     sample_rate: int = SAMPLE_RATE
 ) -> dict:
     """Analyze detector performance frame-by-frame on final 2 seconds.
-    
+
     Args:
         audio: Combined recording
         detector_type: FFT or ESPRIT
         ground_truth_reed1: Expected frequency of reed 1 (lower)
         ground_truth_reed2: Expected frequency of reed 2 (higher)
         sample_rate: Sample rate
-        
+
     Returns:
         Dictionary with frame-by-frame results and statistics
     """
@@ -358,11 +358,11 @@ def analyze_detector_temporal(
 
 def reanalyze_note(note_name: str, timestamp: str) -> dict:
     """Re-analyze all recordings for a single note.
-    
+
     Args:
         note_name: Note name (e.g., "C4")
         timestamp: Recording timestamp
-        
+
     Returns:
         Complete analysis dictionary
     """
@@ -559,7 +559,7 @@ def plot_reed_analysis(
     sample_rate: int = SAMPLE_RATE
 ) -> None:
     """Generate histogram + spectrum plot for a single reed.
-    
+
     Args:
         note_name: Note name (e.g., "A4")
         reed_num: Reed number (1 or 2)

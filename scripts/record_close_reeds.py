@@ -3,7 +3,7 @@ Record close reeds for detection testing and analysis.
 
 This script records:
 1. Reed 1 alone
-2. Reed 2 alone  
+2. Reed 2 alone
 3. Both reeds together
 
 Then analyzes the recordings to:
@@ -47,11 +47,11 @@ def countdown(seconds: int = 3) -> None:
 
 def record_audio(duration: float, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
     """Record audio for specified duration.
-    
+
     Args:
         duration: Recording duration in seconds
         sample_rate: Audio sample rate
-        
+
     Returns:
         Recorded audio as numpy array
     """
@@ -68,11 +68,11 @@ def record_audio(duration: float, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
 
 def save_recording(audio: np.ndarray, filename: str) -> Path:
     """Save audio recording to file.
-    
+
     Args:
         audio: Audio data
         filename: Output filename
-        
+
     Returns:
         Path to saved file
     """
@@ -84,13 +84,13 @@ def save_recording(audio: np.ndarray, filename: str) -> Path:
 
 def extract_ground_truth_frequency(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> float:
     """Extract precise frequency from single reed recording using high-resolution FFT.
-    
+
     Uses a long window with zero-padding for sub-Hz resolution.
-    
+
     Args:
         audio: Audio recording
         sample_rate: Sample rate
-        
+
     Returns:
         Detected frequency in Hz
     """
@@ -137,11 +137,11 @@ def extract_ground_truth_frequency(audio: np.ndarray, sample_rate: int = SAMPLE_
 
 def detect_note_from_audio(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> tuple[str, int]:
     """Auto-detect note from audio using ESPRIT detector.
-    
+
     Args:
         audio: Audio recording
         sample_rate: Sample rate
-        
+
     Returns:
         Tuple of (note_name, octave)
     """
@@ -173,13 +173,13 @@ def analyze_combined_recording(
     sample_rate: int = SAMPLE_RATE
 ) -> dict:
     """Analyze combined recording with detection algorithms.
-    
+
     Args:
         audio: Combined recording
         ground_truth_reed1: Known frequency of reed 1
         ground_truth_reed2: Known frequency of reed 2
         sample_rate: Sample rate
-        
+
     Returns:
         Dictionary with detection results
     """
@@ -242,7 +242,7 @@ def generate_report(
     analysis_results: dict
 ) -> dict:
     """Generate final report dictionary.
-    
+
     Args:
         note_name: Detected note name
         octave: Detected octave
@@ -250,7 +250,7 @@ def generate_report(
         reed2_file: Reed 2 filename
         combined_file: Combined filename
         analysis_results: Analysis results from analyze_combined_recording
-        
+
     Returns:
         Complete report dictionary
     """

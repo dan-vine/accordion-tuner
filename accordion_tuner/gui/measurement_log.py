@@ -172,6 +172,10 @@ class MeasurementLogWindow(QWidget):
         self._copy_btn.clicked.connect(self._copy_to_clipboard)
         buttons_layout.addWidget(self._copy_btn)
 
+        self._delete_last_btn = QPushButton("Delete Last")
+        self._delete_last_btn.clicked.connect(self._delete_last)
+        buttons_layout.addWidget(self._delete_last_btn)
+
         self._clear_btn = QPushButton("Clear All")
         self._clear_btn.clicked.connect(self._clear_all)
         buttons_layout.addWidget(self._clear_btn)
@@ -353,10 +357,23 @@ class MeasurementLogWindow(QWidget):
                 f"{entry.ref_frequency:.2f}",
             ]
 
-            # Add reed data (up to 4 reeds)
+            # Determine if this is a chord entry
+            if entry.notes:
+                # Chord mode: use notes data
+                data_source = entry.notes
+            else:
+                # Reed mode: use reeds data
+                data_source = entry.reeds
+
+            # Add reed/note data (up to 4)
             for i in range(4):
-                if i < len(entry.reeds):
-                    freq, cents = entry.reeds[i]
+                if i < len(data_source):
+                    if entry.notes:
+                        # Chord: (note_name, freq, cents)
+                        _note_n, freq, cents = data_source[i]
+                    else:
+                        # Reed: (freq, cents)
+                        freq, cents = data_source[i]
                     row.append(f"{freq:.2f}")
                     cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
                     row.append(cents_str)
@@ -372,6 +389,23 @@ class MeasurementLogWindow(QWidget):
         clipboard.setText(text)
 
         self._status_label.setText(f"Copied {len(self._entries)} entries")
+
+    def _delete_last(self):
+        """Delete the last measurement entry."""
+        if not self._entries:
+            return
+
+        # Remove last entry from list
+        self._entries.pop()
+
+        # Remove last row from table
+        last_row = self._table.rowCount() - 1
+        if last_row >= 0:
+            self._table.removeRow(last_row)
+
+        # Update count
+        self._count_label.setText(f"{len(self._entries)} entries")
+        self._status_label.setText("Deleted last entry")
 
     def _clear_all(self):
         """Clear all measurements."""

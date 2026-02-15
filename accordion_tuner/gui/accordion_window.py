@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..accordion import AccordionDetector, AccordionResult, DetectorType
+from ..accordion import AccordionDetector, AccordionResult, DetectionMode, DetectorType
 from ..constants import A4_REFERENCE, NOTE_NAMES, SAMPLE_RATE
 from ..temperaments import Temperament
 from ..tremolo_profile import TremoloProfile, load_profile
@@ -62,6 +62,7 @@ class AccordionWindow(QMainWindow):
 
     # Default settings values
     DEFAULTS = {
+        "detection_mode": 0,  # 0=Reeds, 1=Chords
         "num_reeds": 3,
         "reference": 440.0,
         "algorithm": 0,  # 0=FFT, 1=MUSIC, 2=ESPRIT
@@ -100,10 +101,12 @@ class AccordionWindow(QMainWindow):
         # Detection - create first to get hop_size
         self._reference = A4_REFERENCE
         self._num_reeds = 3
+        self._detection_mode = DetectionMode.REEDS
         self._detector = AccordionDetector(
             sample_rate=SAMPLE_RATE,
             reference=self._reference,
             max_reeds=self._num_reeds,
+            detection_mode=self._detection_mode,
         )
 
         # Audio settings - buffer size must match detector's hop_size for accurate phase vocoder
@@ -131,6 +134,7 @@ class AccordionWindow(QMainWindow):
 
         # UI components
         self._reed_panels: list[ReedPanel] = []
+        self._chord_panels: list[ReedPanel] = []  # For chord mode display
         self._settings_expanded = False
 
         # Tremolo profile state
@@ -195,10 +199,19 @@ class AccordionWindow(QMainWindow):
         main_layout.addLayout(note_container)
 
         # Reed panels (horizontal row)
-        self._reed_container = QHBoxLayout()
+        self._reed_frame = QFrame()
+        self._reed_container = QHBoxLayout(self._reed_frame)
         self._reed_container.setSpacing(15)
         self._create_reed_panels()
-        main_layout.addLayout(self._reed_container)
+        main_layout.addWidget(self._reed_frame)
+
+        # Chord panels container (hidden by default)
+        self._chord_frame = QFrame()
+        self._chord_frame.setVisible(False)
+        self._chord_container = QHBoxLayout(self._chord_frame)
+        self._chord_container.setSpacing(15)
+        self._chord_container.addStretch()
+        main_layout.addWidget(self._chord_frame)
 
         # Unified multi-reed tuning meter (below reed panels)
         self._multi_meter = MultiReedMeter(max_reeds=4)
@@ -226,6 +239,21 @@ class AccordionWindow(QMainWindow):
         self._reeds_combo.setCurrentIndex(2)  # Default to 3
         self._reeds_combo.currentIndexChanged.connect(self._on_reeds_changed)
         settings_layout.addWidget(self._reeds_combo)
+
+        settings_layout.addSpacing(30)
+
+        # Detection mode
+        mode_label = QLabel("Mode:")
+        settings_layout.addWidget(mode_label)
+
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItems(["Reeds (Tremolo)", "Chords"])
+        self._mode_combo.setCurrentIndex(0)
+        self._mode_combo.setToolTip(
+            "Reeds: detect multiple reeds for same note\nChords: detect multiple different notes"
+        )
+        self._mode_combo.currentIndexChanged.connect(self._on_detection_mode_changed)
+        settings_layout.addWidget(self._mode_combo)
 
         settings_layout.addSpacing(30)
 
@@ -274,8 +302,14 @@ class AccordionWindow(QMainWindow):
         self._settings_panel.setVisible(False)
         main_layout.addWidget(self._settings_panel)
 
-    def _create_reed_panels(self):
-        """Create reed panels based on current number of reeds."""
+    def _create_reed_panels(self, num_reeds: int | None = None):
+        """Create reed panels based on number of reeds."""
+        # Use provided value, or get from dropdown if available, otherwise use stored value
+        if num_reeds is not None:
+            self._num_reeds = num_reeds
+        elif hasattr(self, "_reeds_combo"):
+            self._num_reeds = self._reeds_combo.currentIndex() + 1
+
         # Clear all items from layout (panels and stretches)
         while self._reed_container.count():
             item = self._reed_container.takeAt(0)
@@ -295,6 +329,41 @@ class AccordionWindow(QMainWindow):
 
         # Add stretch at end for centering
         self._reed_container.addStretch()
+
+    def _create_chord_panels(self, num_notes: int):
+        """Create panels for chord mode display."""
+        while self._chord_container.count():
+            item = self._chord_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        self._chord_panels.clear()
+
+        self._chord_container.addStretch()
+
+        for i in range(num_notes):
+            panel = ReedPanel(reed_number=i + 1)
+            self._chord_panels.append(panel)
+            self._chord_container.addWidget(panel)
+
+        self._chord_container.addStretch()
+
+    def _update_chord_display_visibility(self):
+        """Show/hide reed or chord containers based on detection mode."""
+        # Get current number from dropdown (in case it changed without triggering handler)
+        num_reeds = self._reeds_combo.currentIndex() + 1
+
+        if self._detection_mode == DetectionMode.CHORDS:
+            self._reed_frame.setVisible(False)
+            self._chord_frame.setVisible(True)
+            self._note_display.setVisible(False)
+            # Create chord panels when entering chord mode (use num_reeds setting)
+            self._create_chord_panels(num_reeds)
+        else:
+            self._reed_frame.setVisible(True)
+            self._create_reed_panels(num_reeds)
+            self._chord_frame.setVisible(False)
+            self._note_display.setVisible(True)
 
     def _create_settings_panel(self) -> QFrame:
         """Create the expandable settings panel with tabbed categories."""
@@ -1200,6 +1269,8 @@ class AccordionWindow(QMainWindow):
                 self._note_display.set_inactive()
                 for panel in self._reed_panels:
                     panel.set_inactive()
+                for panel in self._chord_panels:
+                    panel.set_inactive()
                 self._multi_meter.set_all_inactive()
                 if result and result.spectrum_data:
                     freqs, mags = result.spectrum_data
@@ -1226,6 +1297,8 @@ class AccordionWindow(QMainWindow):
                 # Still waiting for a note
                 self._note_display.set_inactive()
                 for panel in self._reed_panels:
+                    panel.set_inactive()
+                for panel in self._chord_panels:
                     panel.set_inactive()
                 self._multi_meter.set_all_inactive()
                 if result and result.spectrum_data:
@@ -1272,6 +1345,10 @@ class AccordionWindow(QMainWindow):
 
     def _display_result(self, result: AccordionResult):
         """Display the given result on all UI components."""
+        if self._detection_mode == DetectionMode.CHORDS:
+            self._display_chord_result(result)
+            return
+
         # Update note display
         self._note_display.set_note(
             result.note_name,
@@ -1336,12 +1413,111 @@ class AccordionWindow(QMainWindow):
                 panel.set_inactive()
                 self._multi_meter.set_reed_data(i, None)
 
+    def _display_chord_result(self, result: AccordionResult):
+        """Display chord mode result."""
+        # Update spectrum view
+        if result.spectrum_data:
+            freqs, mags = result.spectrum_data
+            self._spectrum_view.set_spectrum(freqs, mags)
+            # Get all frequencies from all notes
+            all_freqs = []
+            for note_group in result.notes:
+                for reed in note_group.reeds:
+                    all_freqs.append(reed.frequency)
+            self._spectrum_view.set_peaks(all_freqs)
+            # Zoom to primary note if available
+            if result.notes and result.notes[0].reeds:
+                self._spectrum_view.set_zoom(
+                    result.notes[0].reeds[0].frequency, self._zoom_spectrum
+                )
+            else:
+                self._spectrum_view.set_zoom(None, self._zoom_spectrum)
+
+        # Get number of notes
+        num_notes = len(result.notes)
+
+        # Update chord panels with note data (sorted by pitch)
+        sorted_notes = sorted(result.notes, key=lambda n: (n.octave, n.note_name))
+
+        # Update multi-meter to show correct number of notes
+        self._multi_meter.set_num_reeds(num_notes)
+
+        for i, panel in enumerate(self._chord_panels):
+            if i < num_notes:
+                note_group = sorted_notes[i]
+                reed = note_group.reeds[0] if note_group.reeds else None
+
+                if reed:
+                    note_label = f"{note_group.note_name}{note_group.octave}"
+                    panel.set_data(
+                        reed.frequency,
+                        reed.cents,
+                        None,  # No beat frequency between different notes
+                        None,  # No target cents in chord mode
+                        reed.stability,
+                        reed.sample_count,
+                        reed.precision_frequency,
+                        reed.precision_cents,
+                        note_label,
+                    )
+                    # Update unified meter with this note's cents
+                    self._multi_meter.set_reed_data(i, reed.cents)
+                else:
+                    panel.set_inactive()
+                    self._multi_meter.set_reed_data(i, None)
+            else:
+                panel.set_inactive()
+                self._multi_meter.set_reed_data(i, None)
+
     def _on_reeds_changed(self, index: int):
         """Handle number of reeds change."""
-        self._num_reeds = index + 1  # 0=1, 1=2, 2=3, 3=4
-        self._detector.set_max_reeds(self._num_reeds)
-        self._create_reed_panels()
-        self._multi_meter.set_num_reeds(self._num_reeds)
+        num_reeds = index + 1  # 0=1, 1=2, 2=3, 3=4
+        self._detector.set_max_reeds(num_reeds)
+
+        if self._detection_mode == DetectionMode.CHORDS:
+            # In chord mode, recreate chord panels with new number
+            self._create_chord_panels(num_reeds)
+        else:
+            self._create_reed_panels(num_reeds)
+
+        self._multi_meter.set_num_reeds(num_reeds)
+
+    def _on_detection_mode_changed(self, index: int):
+        """Handle detection mode change."""
+        self._detection_mode = DetectionMode.REEDS if index == 0 else DetectionMode.CHORDS
+        self._detector.set_detection_mode(self._detection_mode)
+        self._update_chord_display_visibility()
+        self._update_settings_for_detection_mode()
+
+        # In chord mode, don't zoom spectrum; in reed mode, use zoom setting
+        if self._detection_mode == DetectionMode.CHORDS:
+            self._zoom_spectrum = False
+        else:
+            self._zoom_spectrum = True
+
+    def _update_settings_for_detection_mode(self):
+        """Enable/disable settings based on detection mode."""
+        if self._detection_mode == DetectionMode.CHORDS:
+            # In chord mode, reeds combo controls number of chord notes to display
+            self._reeds_combo.setEnabled(True)
+            self._octave_filter_cb.setEnabled(False)
+            self._octave_filter_cb.setChecked(False)
+            self._fundamental_filter_cb.setEnabled(False)
+            self._fundamental_filter_cb.setChecked(False)
+            self._reed_spread_slider.setEnabled(False)
+            self._profile_combo.setEnabled(False)
+            self._simple_fft_search_slider.setEnabled(False)
+            self._simple_fft_threshold_slider.setEnabled(False)
+        else:
+            self._reeds_combo.setEnabled(True)
+            self._octave_filter_cb.setEnabled(True)
+            self._fundamental_filter_cb.setEnabled(True)
+            self._reed_spread_slider.setEnabled(True)
+            self._profile_combo.setEnabled(True)
+            algo = self._algorithm_combo.currentIndex()
+            if algo == 2:
+                self._simple_fft_search_slider.setEnabled(True)
+                self._simple_fft_threshold_slider.setEnabled(True)
 
     def _on_reference_changed(self, value: float):
         """Handle reference frequency change."""
@@ -1366,6 +1542,11 @@ class AccordionWindow(QMainWindow):
         # Number of reeds
         num_reeds = settings.value("num_reeds", self.DEFAULTS["num_reeds"], type=int)
         self._reeds_combo.setCurrentIndex(num_reeds - 1)
+
+        # Detection mode
+        detection_mode = settings.value("detection_mode", self.DEFAULTS["detection_mode"], type=int)
+        self._mode_combo.setCurrentIndex(detection_mode)
+        self._detection_mode = DetectionMode.REEDS if detection_mode == 0 else DetectionMode.CHORDS
 
         # Reference frequency
         reference = settings.value("reference", self.DEFAULTS["reference"], type=float)
@@ -1505,12 +1686,20 @@ class AccordionWindow(QMainWindow):
         # Apply all loaded settings to the detector
         self._apply_ui_settings_to_detector()
 
+        # Apply detection mode to detector and update UI
+        self._detector.set_detection_mode(self._detection_mode)
+        self._update_chord_display_visibility()
+        self._update_settings_for_detection_mode()
+
     def _save_settings(self):
         """Save current settings to QSettings."""
         settings = QSettings("accordion-tuner", "AccordionTuner")
 
         # Number of reeds
         settings.setValue("num_reeds", self._reeds_combo.currentIndex() + 1)
+
+        # Detection mode
+        settings.setValue("detection_mode", self._mode_combo.currentIndex())
 
         # Reference frequency
         settings.setValue("reference", self._ref_spinbox.value())
@@ -1580,6 +1769,7 @@ class AccordionWindow(QMainWindow):
 
         # Reset all widgets to defaults (this triggers their change handlers)
         self._reeds_combo.setCurrentIndex(self.DEFAULTS["num_reeds"] - 1)
+        self._mode_combo.setCurrentIndex(self.DEFAULTS["detection_mode"])
         self._ref_spinbox.setValue(self.DEFAULTS["reference"])
         self._algorithm_combo.setCurrentIndex(self.DEFAULTS["algorithm"])
         self._octave_filter_cb.setChecked(self.DEFAULTS["octave_filter"])

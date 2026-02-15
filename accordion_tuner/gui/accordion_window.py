@@ -69,7 +69,7 @@ class AccordionWindow(QMainWindow):
         "fundamental_filter": False,
         "sensitivity": 10,
         "reed_spread": 50,
-        "peak_threshold": 25,  # 25% of max peak
+        "peak_threshold": 15,  # 15% of max peak
         "temperament": 8,  # Equal
         "key": 0,  # C
         "transpose": 0,
@@ -78,9 +78,9 @@ class AccordionWindow(QMainWindow):
         "settings_expanded": False,
         "tremolo_profile_path": "",  # Path to last loaded profile
         # ESPRIT-specific settings
-        "esprit_width": 25,  # 0.25
+        "esprit_width": 18,  # 0.18
         "esprit_separation": 50,  # 0.50 Hz
-        "esprit_offsets": 0,  # Default offsets preset
+        "esprit_offsets": 1,  # Default offsets preset (tighter)
         # SimpleFFT-specific settings
         "simple_fft_search": 30,  # 3.0 Hz
         "simple_fft_threshold": 10,  # 0.10 (10%)
@@ -406,7 +406,7 @@ class AccordionWindow(QMainWindow):
         peak_layout.addWidget(QLabel("Peak Threshold:"))
         self._peak_threshold_slider = QSlider(Qt.Orientation.Horizontal)
         self._peak_threshold_slider.setRange(5, 50)
-        self._peak_threshold_slider.setValue(25)
+        self._peak_threshold_slider.setValue(15)
         self._peak_threshold_slider.setMinimumWidth(100)
         self._peak_threshold_slider.setToolTip(
             "Relative threshold: peaks must be this % of the strongest peak.\n"
@@ -414,7 +414,7 @@ class AccordionWindow(QMainWindow):
         )
         self._peak_threshold_slider.valueChanged.connect(self._on_peak_threshold_changed)
         peak_layout.addWidget(self._peak_threshold_slider)
-        self._peak_threshold_value = QLabel("25%")
+        self._peak_threshold_value = QLabel("15%")
         peak_layout.addWidget(self._peak_threshold_value)
         sliders_row.addLayout(peak_layout)
 
@@ -563,8 +563,8 @@ class AccordionWindow(QMainWindow):
         self._esprit_offsets_combo.setFixedWidth(180)
         self._esprit_offsets_combo.addItems(
             [
-                "±0.4, ±0.8 Hz (default)",
-                "±0.3, ±0.6 Hz (tighter)",
+                "±0.4, ±0.8 Hz",
+                "±0.3, ±0.6 Hz (default)",
                 "±0.5, ±1.0 Hz (wider)",
                 "±0.4, ±0.8, ±1.2 Hz (extended)",
                 "None (disable)",

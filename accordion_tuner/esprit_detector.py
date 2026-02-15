@@ -135,20 +135,21 @@ class EspritPitchDetector:
         self.octave_filter = True
 
         # Configurable parameters for close-frequency detection
-        # Width threshold: ratio at ±2 bins to detect merged peaks (default 0.25)
+        # Width threshold: ratio at ±2 bins to detect merged peaks
         # Single sinusoid with Hamming drops to ~0.08 at ±2 bins
-        # Higher values = more sensitive to merged peaks
-        self._width_threshold = 0.25
+        # Balanced value - triggers on merged peaks but not single tones
+        self._width_threshold = 0.18
 
         # Candidate offsets: Hz offsets to add around detected merged peaks
         # These help ESPRIT resolve close frequencies
-        self._candidate_offsets = [-0.8, -0.4, 0.4, 0.8]
+        # Tighter offsets for typical accordion tremolo separations
+        self._candidate_offsets = [-0.6, -0.3, 0.3, 0.6]
 
         # Minimum separation between detected frequencies (Hz)
         self._min_separation = 0.5
 
         # Peak threshold: peaks must be at least this fraction of the maximum
-        self.peak_threshold = 0.10  # 10% - lower than FFT since ESPRIT filters later
+        self.peak_threshold = 0.05  # 5% - lower to detect more peaks
 
     def process(self, samples: np.ndarray) -> MultiPitchResult:
         """

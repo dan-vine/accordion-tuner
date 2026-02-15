@@ -338,7 +338,8 @@ class AccordionWindow(QMainWindow):
         self._algorithm_combo.setCurrentIndex(0)
         self._algorithm_combo.setToolTip(
             "FFT: Fast, reliable detection using phase vocoder\n"
-            "ESPRIT: Best for closely-spaced frequencies (1-5 Hz tremolo reeds)"
+            "ESPRIT: Good for closely-spaced frequencies\n"
+            "Simple FFT: Best for close frequencies, needs time to stabilize"
         )
         self._algorithm_combo.currentIndexChanged.connect(self._on_algorithm_changed)
         algo_row.addWidget(self._algorithm_combo)
@@ -853,6 +854,29 @@ class AccordionWindow(QMainWindow):
             self.setMinimumHeight(540)
             self.resize(self.width(), 540)
 
+    def _apply_ui_settings_to_detector(self):
+        """Apply all current UI settings to the detector."""
+        # Filters and sensitivity
+        self._detector.set_octave_filter(self._octave_filter_cb.isChecked())
+        self._detector.set_fundamental_filter(self._fundamental_filter_cb.isChecked())
+        self._detector.set_sensitivity(self._sensitivity_slider.value() / 100.0)
+
+        # Thresholds
+        self._detector.set_peak_threshold(self._peak_threshold_slider.value() / 100.0)
+        self._detector.set_reed_spread(float(self._reed_spread_slider.value()))
+
+        # Smoothing
+        self._detector.set_smoothing_enabled(self._smoothing_cb.isChecked())
+        self._detector.set_smoothing_window(self._smoothing_slider.value())
+
+        # Precision mode
+        self._detector.set_precision_enabled(self._precision_cb.isChecked())
+        self._detector.set_precision_window(self._precision_slider.value())
+
+        # Tuning
+        self._detector.set_temperament(Temperament(self._temperament_combo.currentIndex()))
+        self._detector.set_key(self._key_combo.currentIndex())
+
     def _on_algorithm_changed(self, index: int):
         """Handle algorithm combo change."""
         if index == 1:
@@ -879,6 +903,9 @@ class AccordionWindow(QMainWindow):
         if index == 2:
             self._on_simple_fft_search_changed(self._simple_fft_search_slider.value())
             self._on_simple_fft_threshold_changed(self._simple_fft_threshold_slider.value())
+
+        # Apply filter and sensitivity settings to the new detector
+        self._apply_ui_settings_to_detector()
 
     def _on_esprit_width_changed(self, value: int):
         """Handle ESPRIT width threshold slider change."""
@@ -1474,6 +1501,9 @@ class AccordionWindow(QMainWindow):
         geometry = settings.value("window_geometry")
         if geometry:
             self.restoreGeometry(geometry)
+
+        # Apply all loaded settings to the detector
+        self._apply_ui_settings_to_detector()
 
     def _save_settings(self):
         """Save current settings to QSettings."""

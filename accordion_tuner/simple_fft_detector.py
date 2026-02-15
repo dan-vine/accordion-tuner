@@ -63,7 +63,7 @@ class SimpleFftPeakDetector:
 
         self.fundamental_filter = False
         self.octave_filter = True
-        self._min_magnitude = 0.0
+        self._min_magnitude = 0.5
         self.peak_threshold = 0.25
         self.temperament = Temperament.EQUAL
         self.key = 0
@@ -144,7 +144,7 @@ class SimpleFftPeakDetector:
 
         n_fft = self.fft_size * 4
         spectrum = np.fft.rfft(signal, n=n_fft)
-        mags = np.abs(spectrum)
+        mags = np.abs(spectrum) / (self.fft_size // 8)
         freqs = np.fft.rfftfreq(n_fft, 1.0 / self.sample_rate)
 
         valid_mask = (freqs >= 60) & (freqs <= 2000)
@@ -155,6 +155,8 @@ class SimpleFftPeakDetector:
             return MultiPitchResult()
 
         max_mag = np.max(mags_valid)
+        if max_mag < self._min_magnitude:
+            return MultiPitchResult()
 
         # Use peak_threshold and min_magnitude to filter out noise peaks
         relative_threshold = max_mag * self.peak_threshold

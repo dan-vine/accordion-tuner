@@ -185,7 +185,7 @@ class AccordionDetector:
             # Disable octave filter to detect closely-spaced frequencies
             self._detector.set_octave_filter(False)
         # Lower threshold for typical microphone input levels
-        self._detector.set_min_magnitude(0.1)
+        self._detector.set_min_magnitude(0.03)
 
         # Apply stored temperament and key
         self._detector.set_temperament(self._temperament)

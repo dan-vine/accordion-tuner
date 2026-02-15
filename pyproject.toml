@@ -1,6 +1,6 @@
 [project]
 name = "accordion-tuner"
-version = "0.1.0"
+version = "0.1.6"
 description = "Accordion reed tuner with multi-pitch detection and temperament support"
 requires-python = ">=3.10"
 dependencies = [

@@ -8,7 +8,7 @@ from .esprit_detector import EspritPitchDetector
 from .multi_pitch_detector import Maximum, MultiPitchDetector, MultiPitchResult
 from .temperaments import TEMPERAMENTS, Temperament
 
-__version__ = "0.1.0"
+__version__ = "0.1.6"
 __all__ = [
     "MultiPitchDetector",
     "EspritPitchDetector",

@@ -185,7 +185,7 @@ class AccordionDetector:
             # Disable octave filter to detect closely-spaced frequencies
             self._detector.set_octave_filter(False)
         # Lower threshold for typical microphone input levels
-        self._detector.set_min_magnitude(0.1)
+        self._detector.set_min_magnitude(0.03)
 
         # Apply stored temperament and key
         self._detector.set_temperament(self._temperament)
@@ -227,7 +227,7 @@ class AccordionDetector:
         multi_result = self._detector.process(samples)
 
         # Compute spectrum for display
-        self._compute_spectrum(samples)
+        self._compute_spectrum()
 
         if not multi_result.valid or not multi_result.maxima:
             self._smoother.set_inactive()
@@ -659,7 +659,7 @@ class AccordionDetector:
             is_stable=is_stable,
         )
 
-    def _compute_spectrum(self, samples: np.ndarray):
+    def _compute_spectrum(self):
         """Compute FFT spectrum for display with zero-padding for finer resolution."""
         # Use the detector's accumulated buffer for full frequency resolution
         # The detector maintains a 16384-sample buffer that accumulates across calls
@@ -776,11 +776,10 @@ class AccordionDetector:
 
         Only effective when using ESPRIT detector.
         A single Hamming-windowed sinusoid has ~0.08 ratio at ±2 bins.
-        Higher thresholds = less sensitive to merged peaks (fewer false positives).
         Lower thresholds = more sensitive (better close-freq detection but may hallucinate).
 
         Args:
-            threshold: Ratio threshold (0.1 to 0.5, default 0.25)
+            threshold: Ratio threshold (0.1 to 0.5, default 0.18)
         """
         if isinstance(self._detector, EspritPitchDetector):
             self._detector.set_width_threshold(threshold)
@@ -800,7 +799,7 @@ class AccordionDetector:
         to help ESPRIT resolve the close frequencies.
 
         Args:
-            offsets: List of Hz offsets (e.g., [-0.8, -0.4, 0.4, 0.8])
+            offsets: List of Hz offsets (e.g., [-0.6, -0.3, 0.3, 0.6])
         """
         if isinstance(self._detector, EspritPitchDetector):
             self._detector.set_candidate_offsets(offsets)
@@ -809,7 +808,7 @@ class AccordionDetector:
         """Get ESPRIT candidate offsets (returns default if not using ESPRIT)."""
         if isinstance(self._detector, EspritPitchDetector):
             return self._detector.get_candidate_offsets()
-        return [-0.8, -0.4, 0.4, 0.8]
+        return [-0.6, -0.3, 0.3, 0.6]
 
     def set_esprit_min_separation(self, separation: float):
         """

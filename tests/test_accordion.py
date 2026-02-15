@@ -411,6 +411,19 @@ class TestAccordionDetectorChords:
         assert "E" in notes
         assert "G" in notes
 
+        # Verify each note has its own distinct frequency
+        freqs = [n.reeds[0].frequency for n in result.notes if n.reeds]
+        assert len(set(freqs)) >= 2, f"Expected different frequencies, got {freqs}"
+
+        # Check frequencies are approximately correct (±5 Hz tolerance)
+        expected = {"C": 261.63, "E": 329.63, "G": 392.0}
+        for note in result.notes:
+            if note.reeds and note.note_name in expected:
+                assert abs(note.reeds[0].frequency - expected[note.note_name]) < 5.0, (
+                    f"Expected {note.note_name} ~{expected[note.note_name]} Hz, "
+                    f"got {note.reeds[0].frequency} Hz"
+                )
+
     def test_a_minor_chord(self):
         """Test A minor chord (A3 + C4 + E4) detection."""
         signal = self.generate_signal([220.0, 261.63, 329.63])

@@ -252,6 +252,19 @@ class AccordionDetector:
         """Set the detection mode (REEDS or CHORDS)."""
         self._detection_mode = mode
 
+        # In chord mode, increase num_sources to detect more notes
+        if mode == DetectionMode.CHORDS:
+            if isinstance(self._detector, EspritPitchDetector):
+                self._detector.set_num_sources(8)
+            elif isinstance(self._detector, SimpleFftPeakDetector):
+                self._detector.set_num_sources(8)
+        else:
+            # Restore max_reeds in reed mode
+            if isinstance(self._detector, EspritPitchDetector):
+                self._detector.set_num_sources(self.max_reeds)
+            elif isinstance(self._detector, SimpleFftPeakDetector):
+                self._detector.set_num_sources(self.max_reeds)
+
     def get_detection_mode(self) -> DetectionMode:
         """Get the current detection mode."""
         return self._detection_mode
@@ -334,36 +347,31 @@ class AccordionDetector:
         note_groups: list[NoteGroup] = []
 
         for m in maxima:
+            # Limit number of notes to max_reeds
+            if len(note_groups) >= self.max_reeds:
+                break
+
             note_key = (m.note_name, m.octave)
             if note_key in processed_notes:
                 continue
 
             processed_notes.add(note_key)
 
-            reeds = self._group_reeds(
-                maxima,
-                m.note_name,
-                m.octave,
-                m.ref_frequency,
+            # For chord mode: directly create ReedInfo from the maximum
+            # (don't use _group_reeds which filters by cents spread for tremolo)
+            reed = ReedInfo(
+                frequency=m.frequency,
+                cents=m.cents,
+                magnitude=m.magnitude,
             )
-
-            if not reeds:
-                continue
-
-            beat_freqs = []
-            for i in range(len(reeds) - 1):
-                f1 = reeds[i].precision_frequency or reeds[i].frequency
-                f2 = reeds[i + 1].precision_frequency or reeds[i + 1].frequency
-                beat = abs(f1 - f2)
-                beat_freqs.append(beat)
 
             note_groups.append(
                 NoteGroup(
                     note_name=m.note_name,
                     octave=m.octave,
                     ref_frequency=m.ref_frequency,
-                    reeds=reeds,
-                    beat_frequencies=beat_freqs,
+                    reeds=[reed],
+                    beat_frequencies=[],
                 )
             )
 

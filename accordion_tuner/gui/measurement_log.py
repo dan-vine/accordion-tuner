@@ -35,9 +35,10 @@ class MeasurementEntry:
     """A single recorded measurement."""
 
     timestamp: str  # "HH:MM:SS"
-    note_name: str  # "A4"
+    note_name: str  # "A4" or "C4|E4|G4" for chords
     ref_frequency: float  # 440.0
     reeds: list[tuple[float, float]] = field(default_factory=list)  # [(freq, cents), ...]
+    notes: list[tuple[str, float, float]] = field(default_factory=list)  # [(note_name, freq, cents), ...] for chords
 
 
 class MeasurementLogWindow(QWidget):
@@ -256,14 +257,32 @@ class MeasurementLogWindow(QWidget):
 
         # Create entry
         timestamp = datetime.now().strftime("%H:%M:%S")
-        note_name = f"{result.note_name}{result.octave}"
-        reeds = [(r.frequency, r.cents) for r in result.reeds]
+
+        # Check if this is a chord (has notes list with multiple entries)
+        is_chord = hasattr(result, 'notes') and len(result.notes) > 1
+
+        if is_chord:
+            # Chord mode: build note names string like "C4|E4|G4"
+            note_names = [f"{n.note_name}{n.octave}" for n in result.notes]
+            note_name = "|".join(note_names)
+            # Use first note's ref frequency as primary
+            ref_frequency = result.notes[0].ref_frequency if result.notes else result.ref_frequency
+            # Store notes list for chord: (note_name, frequency, cents)
+            notes = [(f"{n.note_name}{n.octave}", n.reeds[0].frequency, n.reeds[0].cents) for n in result.notes if n.reeds]
+            reeds = []
+        else:
+            # Reed mode: use existing structure
+            note_name = f"{result.note_name}{result.octave}"
+            ref_frequency = result.ref_frequency
+            reeds = [(r.frequency, r.cents) for r in result.reeds]
+            notes = []
 
         entry = MeasurementEntry(
             timestamp=timestamp,
             note_name=note_name,
-            ref_frequency=result.ref_frequency,
+            ref_frequency=ref_frequency,
             reeds=reeds,
+            notes=notes,
         )
         self._entries.append(entry)
 
@@ -275,15 +294,27 @@ class MeasurementLogWindow(QWidget):
         self._table.setItem(row, 1, QTableWidgetItem(entry.note_name))
         self._table.setItem(row, 2, QTableWidgetItem(f"{entry.ref_frequency:.2f}"))
 
-        # Add reed data (up to 4 reeds)
-        for i, (freq, cents) in enumerate(entry.reeds):
-            if i >= 4:
-                break
-            col_freq = 3 + i * 2
-            col_cents = 4 + i * 2
-            self._table.setItem(row, col_freq, QTableWidgetItem(f"{freq:.2f}"))
-            cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
-            self._table.setItem(row, col_cents, QTableWidgetItem(cents_str))
+        # Add reed data (up to 4 reeds) or chord notes
+        if is_chord:
+            # Chord mode: use reed columns for chord notes
+            for i, (_note_n, freq, cents) in enumerate(entry.notes):
+                if i >= 4:
+                    break
+                col_freq = 3 + i * 2
+                col_cents = 4 + i * 2
+                self._table.setItem(row, col_freq, QTableWidgetItem(f"{freq:.2f}"))
+                cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
+                self._table.setItem(row, col_cents, QTableWidgetItem(cents_str))
+        else:
+            # Reed mode: original behavior
+            for i, (freq, cents) in enumerate(entry.reeds):
+                if i >= 4:
+                    break
+                col_freq = 3 + i * 2
+                col_cents = 4 + i * 2
+                self._table.setItem(row, col_freq, QTableWidgetItem(f"{freq:.2f}"))
+                cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
+                self._table.setItem(row, col_cents, QTableWidgetItem(cents_str))
 
         # Scroll to bottom
         self._table.scrollToBottom()

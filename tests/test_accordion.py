@@ -5,7 +5,13 @@ Tests for accordion reed detection.
 import numpy as np
 import pytest
 
-from accordion_tuner.accordion import AccordionDetector, AccordionResult, DetectorType, ReedInfo
+from accordion_tuner.accordion import (
+    AccordionDetector,
+    AccordionResult,
+    DetectionMode,
+    DetectorType,
+    ReedInfo,
+)
 
 
 class TestReedInfo:
@@ -42,9 +48,7 @@ class TestAccordionResult:
 
     def test_reed_count(self):
         """Test reed_count property."""
-        result = AccordionResult(
-            reeds=[ReedInfo(), ReedInfo(), ReedInfo()]
-        )
+        result = AccordionResult(reeds=[ReedInfo(), ReedInfo(), ReedInfo()])
         assert result.reed_count == 3
 
     def test_average_cents_empty(self):
@@ -74,8 +78,9 @@ class TestAccordionDetector:
         self.hop_size = self.detector._detector.hop_size
         self.fft_size = self.detector._detector.fft_size
 
-    def generate_signal(self, frequencies: list[float], duration: float = 1.0,
-                        amplitudes: list[float] | None = None):
+    def generate_signal(
+        self, frequencies: list[float], duration: float = 1.0, amplitudes: list[float] | None = None
+    ):
         """Generate a signal with multiple frequencies."""
         t = np.arange(int(self.sample_rate * duration)) / self.sample_rate
         if amplitudes is None:
@@ -113,8 +118,8 @@ class TestAccordionDetector:
     def test_two_detuned_reeds(self):
         """Test detection of two detuned reeds (tremolo)."""
         # Two reeds slightly detuned (common musette tuning)
-        f1 = 440.0       # Reed 1 at A4
-        f2 = 441.5       # Reed 2 slightly sharp (~6 cents)
+        f1 = 440.0  # Reed 1 at A4
+        f2 = 441.5  # Reed 2 slightly sharp (~6 cents)
 
         signal = self.generate_signal([f1, f2])
         result = self.process_signal(signal)
@@ -129,9 +134,9 @@ class TestAccordionDetector:
     def test_three_reeds_musette(self):
         """Test detection of three reeds (musette accordion)."""
         # Typical musette tuning: one flat, one at pitch, one sharp
-        f1 = 438.5       # Reed 1 flat
-        f2 = 440.0       # Reed 2 at pitch
-        f3 = 441.5       # Reed 3 sharp
+        f1 = 438.5  # Reed 1 flat
+        f2 = 440.0  # Reed 2 at pitch
+        f3 = 441.5  # Reed 3 sharp
 
         signal = self.generate_signal([f1, f2, f3], amplitudes=[0.3, 0.3, 0.3])
         result = self.process_signal(signal)
@@ -346,3 +351,125 @@ class TestAccordionDetectorCentsAccuracy:
         assert result.reed_count > 0
         # Should be within 2 cents
         assert abs(result.reeds[0].cents) < 2.0
+
+
+class TestAccordionDetectorChords:
+    """Test accordion detector in chord detection mode."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.detector = AccordionDetector(detection_mode=DetectionMode.CHORDS)
+        self.sample_rate = self.detector.sample_rate
+        self.hop_size = self.detector._detector.hop_size
+
+    def generate_signal(
+        self, frequencies: list[float], duration: float = 1.0, amplitudes: list[float] | None = None
+    ):
+        """Generate a signal with multiple frequencies."""
+        t = np.arange(int(self.sample_rate * duration)) / self.sample_rate
+        if amplitudes is None:
+            amplitudes = [0.8 / len(frequencies)] * len(frequencies)
+        signal = np.zeros(len(t))
+        for freq, amp in zip(frequencies, amplitudes):
+            signal += amp * np.sin(2 * np.pi * freq * t)
+        return signal
+
+    def process_signal(self, signal: np.ndarray, num_frames: int = 10) -> AccordionResult:
+        """Process signal in chunks and return the last stable result."""
+        result = AccordionResult()
+        for i in range(num_frames):
+            start = i * self.hop_size
+            end = start + self.hop_size
+            if end > len(signal):
+                break
+            chunk = signal[start:end]
+            result = self.detector.process(chunk)
+        return result
+
+    def test_major_third_c_e(self):
+        """Test detection of C4 + E4 (major third)."""
+        signal = self.generate_signal([261.63, 329.63])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 2
+
+        notes = [n.note_name for n in result.notes]
+        assert "C" in notes
+        assert "E" in notes
+
+    def test_c_major_chord(self):
+        """Test C major chord (C4 + E4 + G4) detection."""
+        signal = self.generate_signal([261.63, 329.63, 392.0])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [n.note_name for n in result.notes]
+        assert "C" in notes
+        assert "E" in notes
+        assert "G" in notes
+
+    def test_a_minor_chord(self):
+        """Test A minor chord (A3 + C4 + E4) detection."""
+        signal = self.generate_signal([220.0, 261.63, 329.63])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [n.note_name for n in result.notes]
+        assert "A" in notes
+        assert "C" in notes
+        assert "E" in notes
+
+    def test_g_major_chord(self):
+        """Test G major chord (G3 + B3 + D4) detection."""
+        signal = self.generate_signal([196.0, 246.94, 293.66])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [n.note_name for n in result.notes]
+        assert "G" in notes
+        assert "B" in notes
+        assert "D" in notes
+
+    def test_power_chord(self):
+        """Test power chord (A2 + E3) detection."""
+        signal = self.generate_signal([110.0, 164.81])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 2
+
+        notes = [n.note_name for n in result.notes]
+        assert "A" in notes
+        assert "E" in notes
+
+    def test_detection_mode_setting(self):
+        """Test that detection mode can be changed."""
+        detector = AccordionDetector(detection_mode=DetectionMode.REEDS)
+        assert detector.get_detection_mode() == DetectionMode.REEDS
+
+        detector.set_detection_mode(DetectionMode.CHORDS)
+        assert detector.get_detection_mode() == DetectionMode.CHORDS
+
+        detector.set_detection_mode(DetectionMode.REEDS)
+        assert detector.get_detection_mode() == DetectionMode.REEDS
+
+    def test_chord_mode_returns_notes_list(self):
+        """Test that chord mode returns notes list in result."""
+        signal = self.generate_signal([261.63, 329.63, 392.0])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert hasattr(result, "notes")
+        assert len(result.notes) >= 3
+
+        for note_group in result.notes:
+            assert note_group.note_name != ""
+            assert note_group.octave > 0
+            assert len(note_group.reeds) > 0

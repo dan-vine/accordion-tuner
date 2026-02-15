@@ -35,6 +35,13 @@ class DetectorType(Enum):
     SIMPLE_FFT = "simple_fft"  # Simple FFT with scipy find_peaks
 
 
+class DetectionMode(Enum):
+    """Mode for accordion detection."""
+
+    REEDS = "reeds"  # Detect multiple reeds for the same note (tremolo/musette)
+    CHORDS = "chords"  # Detect multiple different notes (chords)
+
+
 @dataclass
 class ReedInfo:
     """Information about a single detected reed."""
@@ -50,6 +57,29 @@ class ReedInfo:
         None  # High-resolution frequency (when precision mode enabled)
     )
     precision_cents: float | None = None  # High-resolution cents deviation
+
+
+@dataclass
+class NoteGroup:
+    """A group of reeds playing the same musical note."""
+
+    note_name: str = ""  # e.g., "C"
+    octave: int = 0  # e.g., 4
+    ref_frequency: float = 0.0  # Reference frequency for this note
+    reeds: list[ReedInfo] = field(default_factory=list)
+    beat_frequencies: list[float] = field(default_factory=list)  # |f1-f2|, |f2-f3|, etc.
+
+    @property
+    def reed_count(self) -> int:
+        """Number of detected reeds in this group."""
+        return len(self.reeds)
+
+    @property
+    def average_cents(self) -> float:
+        """Average cents deviation across all reeds."""
+        if not self.reeds:
+            return 0.0
+        return sum(r.cents for r in self.reeds) / len(self.reeds)
 
 
 @dataclass
@@ -75,6 +105,7 @@ class AccordionResult:
     beat_frequencies: list[float] = field(default_factory=list)  # |f1-f2|, |f2-f3|, etc.
     spectrum_data: tuple[np.ndarray, np.ndarray] | None = None  # (frequencies, magnitudes)
     precision_info: PrecisionInfo | None = None  # Precision mode state
+    notes: list[NoteGroup] = field(default_factory=list)  # Multiple note groups (for chords)
 
     @property
     def reed_count(self) -> int:
@@ -87,6 +118,11 @@ class AccordionResult:
         if not self.reeds:
             return 0.0
         return sum(r.cents for r in self.reeds) / len(self.reeds)
+
+    @property
+    def note_count(self) -> int:
+        """Number of detected note groups (chords)."""
+        return len(self.notes)
 
 
 class AccordionDetector:
@@ -104,6 +140,7 @@ class AccordionDetector:
         max_reeds: int = 4,
         reed_spread_cents: float = 50.0,
         detector_type: DetectorType = DetectorType.FFT,
+        detection_mode: DetectionMode = DetectionMode.REEDS,
     ):
         """
         Initialize accordion detector.
@@ -114,12 +151,14 @@ class AccordionDetector:
             max_reeds: Maximum number of reeds to detect (2-4)
             reed_spread_cents: Maximum cents spread to consider as same note
             detector_type: Type of pitch detection algorithm to use
+            detection_mode: Detection mode (REEDS for tremolo, CHORDS for chords)
         """
         self.sample_rate = sample_rate
         self.reference = reference
         self.max_reeds = min(max(1, max_reeds), 4)
         self.reed_spread_cents = reed_spread_cents
         self._detector_type = detector_type
+        self._detection_mode = detection_mode
 
         # Store current temperament and key for detector configuration/switching
         # Must be initialized before _create_detector/_configure_detector
@@ -209,6 +248,14 @@ class AccordionDetector:
         """Get the current detector type."""
         return self._detector_type
 
+    def set_detection_mode(self, mode: DetectionMode):
+        """Set the detection mode (REEDS or CHORDS)."""
+        self._detection_mode = mode
+
+    def get_detection_mode(self) -> DetectionMode:
+        """Get the current detection mode."""
+        return self._detection_mode
+
     def process(self, samples: np.ndarray) -> AccordionResult:
         """
         Process audio samples and detect accordion reeds.
@@ -219,14 +266,24 @@ class AccordionDetector:
         Returns:
             AccordionResult with detected reed information
         """
-        # Ensure correct dtype
+        if self._detection_mode == DetectionMode.CHORDS:
+            return self._process_chords(samples)
+        return self._process_reeds(samples)
+
+    def _process_chords(self, samples: np.ndarray) -> AccordionResult:
+        """
+        Process audio samples and detect multiple different notes (chords).
+
+        Args:
+            samples: Audio samples as numpy array
+
+        Returns:
+            AccordionResult with detected chord information
+        """
         if samples.dtype != np.float64:
             samples = samples.astype(np.float64)
 
-        # Get multi-pitch detection result
         multi_result = self._detector.process(samples)
-
-        # Compute spectrum for display
         self._compute_spectrum()
 
         if not multi_result.valid or not multi_result.maxima:
@@ -237,10 +294,107 @@ class AccordionDetector:
                 precision_info=precision_info,
             )
 
-        # Primary note from the first (strongest) detection
+        note_groups = self._group_maxima_into_notes(multi_result.maxima)
+
+        if not note_groups:
+            self._smoother.set_inactive()
+            precision_info = self._get_precision_info() if self._precision_enabled else None
+            return AccordionResult(
+                spectrum_data=self._get_spectrum_tuple(),
+                precision_info=precision_info,
+            )
+
+        primary = note_groups[0]
+
+        return AccordionResult(
+            valid=True,
+            note_name=primary.note_name,
+            octave=primary.octave,
+            ref_frequency=primary.ref_frequency,
+            reeds=primary.reeds,
+            beat_frequencies=primary.beat_frequencies,
+            spectrum_data=self._get_spectrum_tuple(),
+            notes=note_groups,
+        )
+
+    def _group_maxima_into_notes(self, maxima: list[Maximum]) -> list[NoteGroup]:
+        """
+        Group detected peaks into separate note groups (for chord detection).
+
+        Args:
+            maxima: List of detected frequency maxima
+
+        Returns:
+            List of NoteGroup, each containing reeds for the same note
+        """
+        if not maxima:
+            return []
+
+        processed_notes: set[tuple[str, int]] = set()
+        note_groups: list[NoteGroup] = []
+
+        for m in maxima:
+            note_key = (m.note_name, m.octave)
+            if note_key in processed_notes:
+                continue
+
+            processed_notes.add(note_key)
+
+            reeds = self._group_reeds(
+                maxima,
+                m.note_name,
+                m.octave,
+                m.ref_frequency,
+            )
+
+            if not reeds:
+                continue
+
+            beat_freqs = []
+            for i in range(len(reeds) - 1):
+                f1 = reeds[i].precision_frequency or reeds[i].frequency
+                f2 = reeds[i + 1].precision_frequency or reeds[i + 1].frequency
+                beat = abs(f1 - f2)
+                beat_freqs.append(beat)
+
+            note_groups.append(
+                NoteGroup(
+                    note_name=m.note_name,
+                    octave=m.octave,
+                    ref_frequency=m.ref_frequency,
+                    reeds=reeds,
+                    beat_frequencies=beat_freqs,
+                )
+            )
+
+        return note_groups
+
+    def _process_reeds(self, samples: np.ndarray) -> AccordionResult:
+        """
+        Process audio samples and detect multiple reeds for the same note.
+
+        Args:
+            samples: Audio samples as numpy array
+
+        Returns:
+            AccordionResult with detected reed information
+        """
+        if samples.dtype != np.float64:
+            samples = samples.astype(np.float64)
+
+        multi_result = self._detector.process(samples)
+        self._compute_spectrum()
+
+        if not multi_result.valid or not multi_result.maxima:
+            self._smoother.set_inactive()
+            precision_info = self._get_precision_info() if self._precision_enabled else None
+            return AccordionResult(
+                spectrum_data=self._get_spectrum_tuple(),
+                precision_info=precision_info,
+            )
+
         primary = multi_result.maxima[0]
 
-        # Group peaks that correspond to the same note (within reed_spread_cents)
         reeds = self._group_reeds(
             multi_result.maxima,
             primary.note_name,
@@ -256,7 +410,6 @@ class AccordionDetector:
                 precision_info=precision_info,
             )
 
-        # Apply temporal smoothing if enabled
         if self._smoothing_enabled:
             reeds = self._apply_smoothing(
                 primary.note_name,
@@ -265,7 +418,6 @@ class AccordionDetector:
                 reeds,
             )
 
-        # Apply precision mode if enabled
         precision_info = None
         if self._precision_enabled:
             reeds, precision_info = self._apply_precision(
@@ -276,8 +428,6 @@ class AccordionDetector:
                 reeds,
             )
 
-        # Calculate beat frequencies between adjacent reeds
-        # Use precision frequencies if available, otherwise regular frequencies
         beat_freqs = []
         for i in range(len(reeds) - 1):
             f1 = reeds[i].precision_frequency or reeds[i].frequency

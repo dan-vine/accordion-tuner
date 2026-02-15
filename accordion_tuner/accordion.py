@@ -227,7 +227,7 @@ class AccordionDetector:
         multi_result = self._detector.process(samples)
 
         # Compute spectrum for display
-        self._compute_spectrum(samples)
+        self._compute_spectrum()
 
         if not multi_result.valid or not multi_result.maxima:
             self._smoother.set_inactive()
@@ -659,7 +659,7 @@ class AccordionDetector:
             is_stable=is_stable,
         )
 
-    def _compute_spectrum(self, samples: np.ndarray):
+    def _compute_spectrum(self):
         """Compute FFT spectrum for display with zero-padding for finer resolution."""
         # Use the detector's accumulated buffer for full frequency resolution
         # The detector maintains a 16384-sample buffer that accumulates across calls

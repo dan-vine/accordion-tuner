@@ -60,6 +60,7 @@ class SimpleFftPeakDetector:
 
         self._buffer = np.zeros(fft_size, dtype=np.float64)
         self._window = np.hamming(fft_size)
+        self._dmax = 0.125
 
         self.fundamental_filter = False
         self.octave_filter = True
@@ -99,6 +100,7 @@ class SimpleFftPeakDetector:
 
     def reset(self):
         self._buffer = np.zeros(self.fft_size, dtype=np.float64)
+        self._dmax = 0.125
 
     def _get_reference_frequency(self, note: int) -> float:
         """Calculate temperament-adjusted reference frequency for a note."""
@@ -140,7 +142,15 @@ class SimpleFftPeakDetector:
         else:
             self._buffer[-len(samples) :] = samples
 
-        signal = self._buffer * self._window
+        # Temporal normalization
+        dmax = np.max(np.abs(self._buffer))
+        if dmax < 0.125:
+            dmax = 0.125
+
+        norm = self._dmax
+        self._dmax = dmax
+
+        signal = (self._buffer / norm) * self._window
 
         n_fft = self.fft_size * 4
         spectrum = np.fft.rfft(signal, n=n_fft)

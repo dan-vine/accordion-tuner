@@ -3,8 +3,7 @@ Tests for measurement log functionality.
 """
 
 
-from accordion_tuner.accordion import AccordionResult, NoteGroup, ReedInfo
-from accordion_tuner.gui.measurement_log import MeasurementEntry
+from accordion_tuner.accordion import AccordionResult, MeasurementEntry, NoteGroup, ReedInfo
 
 
 class TestMeasurementEntry:

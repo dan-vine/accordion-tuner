@@ -2,7 +2,6 @@
 Measurement log window for recording and exporting tuning measurements.
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
@@ -22,24 +21,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..accordion import AccordionResult
+from ..accordion import AccordionResult, MeasurementEntry
 from .styles import (
     BORDER_COLOR,
     MAIN_WINDOW_STYLE,
     PANEL_BACKGROUND,
     TEXT_SECONDARY,
 )
-
-
-@dataclass
-class MeasurementEntry:
-    """A single recorded measurement."""
-
-    timestamp: str  # "HH:MM:SS"
-    note_name: str  # "A4" or "C4|E4|G4" for chords
-    ref_frequency: float  # 440.0
-    reeds: list[tuple[float, float]] = field(default_factory=list)  # [(freq, cents), ...]
-    notes: list[tuple[str, float, float]] = field(default_factory=list)  # [(note_name, freq, cents), ...] for chords
 
 
 class MeasurementLogWindow(QWidget):

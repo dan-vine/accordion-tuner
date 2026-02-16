@@ -125,6 +125,19 @@ class AccordionResult:
         return len(self.notes)
 
 
+@dataclass
+class MeasurementEntry:
+    """A single recorded measurement for the measurement log."""
+
+    timestamp: str  # "HH:MM:SS"
+    note_name: str  # "A4" or "C4|E4|G4" for chords
+    ref_frequency: float  # 440.0
+    reeds: list[tuple[float, float]] = field(default_factory=list)  # [(freq, cents), ...]
+    notes: list[tuple[str, float, float]] = field(
+        default_factory=list
+    )  # [(note_name, freq, cents), ...] for chords
+
+
 class AccordionDetector:
     """
     Detector for accordion reed tuning.

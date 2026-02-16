@@ -7,6 +7,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QButtonGroup,
     QDoubleSpinBox,
@@ -151,7 +152,9 @@ class MeasurementLogWindow(QWidget):
 
         # Configure table appearance
         self._table.setAlternatingRowColors(True)
-        self._table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self._table.verticalHeader().setVisible(False)
 
         # Set column resize modes
@@ -175,6 +178,10 @@ class MeasurementLogWindow(QWidget):
         self._delete_last_btn = QPushButton("Delete Last")
         self._delete_last_btn.clicked.connect(self._delete_last)
         buttons_layout.addWidget(self._delete_last_btn)
+
+        self._delete_selected_btn = QPushButton("Delete Selected")
+        self._delete_selected_btn.clicked.connect(self._delete_selected)
+        buttons_layout.addWidget(self._delete_selected_btn)
 
         self._clear_btn = QPushButton("Clear All")
         self._clear_btn.clicked.connect(self._clear_all)
@@ -203,6 +210,9 @@ class MeasurementLogWindow(QWidget):
             }}
             QTableWidget::item:alternate {{
                 background-color: #252525;
+            }}
+            QTableWidget::item:selected {{
+                background-color: #0078d4;
             }}
             QHeaderView::section {{
                 background-color: {PANEL_BACKGROUND};
@@ -406,6 +416,23 @@ class MeasurementLogWindow(QWidget):
         # Update count
         self._count_label.setText(f"{len(self._entries)} entries")
         self._status_label.setText("Deleted last entry")
+
+    def _delete_selected(self):
+        """Delete selected measurement entries."""
+        selected_rows = sorted(
+            set(index.row() for index in self._table.selectedIndexes()),
+            reverse=True,  # Delete from bottom up to preserve indices
+        )
+        if not selected_rows:
+            return
+
+        for row in selected_rows:
+            self._entries.pop(row)
+            self._table.removeRow(row)
+
+        count = len(selected_rows)
+        self._count_label.setText(f"{len(self._entries)} entries")
+        self._status_label.setText(f"Deleted {count} {'entry' if count == 1 else 'entries'}")
 
     def _clear_all(self):
         """Clear all measurements."""

@@ -263,7 +263,7 @@ class MeasurementLogWindow(QWidget):
         timestamp = datetime.now().strftime("%H:%M:%S")
 
         # Check if this is a chord (has notes list with multiple entries)
-        is_chord = hasattr(result, 'notes') and len(result.notes) > 1
+        is_chord = len(result.notes) > 1
 
         if is_chord:
             # Chord mode: build note names string like "C4|E4|G4"
@@ -301,7 +301,7 @@ class MeasurementLogWindow(QWidget):
         # Add reed data (up to 4 reeds) or chord notes
         if is_chord:
             # Chord mode: use reed columns for chord notes
-            for i, (_note_n, freq, cents) in enumerate(entry.notes):
+            for i, (_, freq, cents) in enumerate(entry.notes):
                 if i >= 4:
                     break
                 col_freq = 3 + i * 2
@@ -370,7 +370,7 @@ class MeasurementLogWindow(QWidget):
                 if i < len(data_source):
                     if entry.notes:
                         # Chord: (note_name, freq, cents)
-                        _note_n, freq, cents = data_source[i]
+                        _, freq, cents = data_source[i]
                     else:
                         # Reed: (freq, cents)
                         freq, cents = data_source[i]

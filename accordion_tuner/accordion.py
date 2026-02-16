@@ -279,6 +279,9 @@ class AccordionDetector:
         Returns:
             AccordionResult with detected reed information
         """
+        if samples.dtype != np.float64:
+            samples = samples.astype(np.float64)
+
         if self._detection_mode == DetectionMode.CHORDS:
             return self._process_chords(samples)
         return self._process_reeds(samples)
@@ -293,9 +296,6 @@ class AccordionDetector:
         Returns:
             AccordionResult with detected chord information
         """
-        if samples.dtype != np.float64:
-            samples = samples.astype(np.float64)
-
         multi_result = self._detector.process(samples)
         self._compute_spectrum()
 
@@ -387,9 +387,6 @@ class AccordionDetector:
         Returns:
             AccordionResult with detected reed information
         """
-        if samples.dtype != np.float64:
-            samples = samples.astype(np.float64)
-
         multi_result = self._detector.process(samples)
         self._compute_spectrum()
 

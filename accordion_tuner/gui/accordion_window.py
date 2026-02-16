@@ -1472,6 +1472,7 @@ class AccordionWindow(QMainWindow):
     def _on_reeds_changed(self, index: int):
         """Handle number of reeds change."""
         num_reeds = index + 1  # 0=1, 1=2, 2=3, 3=4
+        self._num_reeds = num_reeds
         self._detector.set_max_reeds(num_reeds)
 
         if self._detection_mode == DetectionMode.CHORDS:

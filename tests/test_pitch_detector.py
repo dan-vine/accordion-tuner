@@ -345,3 +345,89 @@ class TestEspritSettings:
         assert self.detector.fundamental_filter is True
         self.detector.set_fundamental_filter(False)
         assert self.detector.fundamental_filter is False
+
+
+class TestEspritChords:
+    """Tests for ESPRIT chord (multiple note) detection."""
+
+    def setup_method(self):
+        from accordion_tuner.esprit_detector import EspritPitchDetector
+
+        self.detector = EspritPitchDetector()
+
+    def generate_signal(self, frequencies: list[float], amplitudes: list[float] | None = None):
+        """Generate a signal with multiple frequencies."""
+        if amplitudes is None:
+            amplitudes = [0.8 / len(frequencies)] * len(frequencies)
+        t = np.arange(self.detector.fft_size) / self.detector.sample_rate
+        signal = np.zeros(len(t))
+        for freq, amp in zip(frequencies, amplitudes):
+            signal += amp * np.sin(2 * np.pi * freq * t)
+        return signal.astype(np.float32)
+
+    def process_signal(self, signal: np.ndarray):
+        """Process signal and return result."""
+        return self.detector.process(signal)
+
+    def test_major_third_c_e(self):
+        """Test C4 + E4 (major third) detection."""
+        signal = self.generate_signal([261.63, 329.63])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 2
+
+        notes = [m.note_name for m in result.maxima[:2]]
+        assert "C" in notes
+        assert "E" in notes
+
+    def test_c_major_chord(self):
+        """Test C major chord (C4 + E4 + G4) detection."""
+        signal = self.generate_signal([261.63, 329.63, 392.0])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [m.note_name for m in result.maxima[:3]]
+        assert "C" in notes
+        assert "E" in notes
+        assert "G" in notes
+
+    def test_a_minor_chord(self):
+        """Test A minor chord (A3 + C4 + E4) detection."""
+        signal = self.generate_signal([220.0, 261.63, 329.63])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [m.note_name for m in result.maxima[:3]]
+        assert "A" in notes
+        assert "C" in notes
+        assert "E" in notes
+
+    def test_g_major_chord(self):
+        """Test G major chord (G3 + B3 + D4) detection."""
+        signal = self.generate_signal([196.0, 246.94, 293.66])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [m.note_name for m in result.maxima[:3]]
+        assert "G" in notes
+        assert "B" in notes
+        assert "D" in notes
+
+    def test_power_chord(self):
+        """Test power chord (A2 + E3) detection."""
+        signal = self.generate_signal([110.0, 164.81])
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 2
+
+        notes = [m.note_name for m in result.maxima[:2]]
+        assert "A" in notes
+        assert "E" in notes

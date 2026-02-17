@@ -48,6 +48,22 @@ def generate_two_sine_waves(
     return signal
 
 
+def generate_multi_sine_waves(
+    frequencies: list[float],
+    duration_samples: int,
+    sample_rate: int = SAMPLE_RATE,
+    amplitudes: list[float] | None = None,
+) -> np.ndarray:
+    """Generate a signal with multiple sine waves (for testing chords)."""
+    if amplitudes is None:
+        amplitudes = [0.8 / len(frequencies)] * len(frequencies)
+    t = np.arange(duration_samples) / sample_rate
+    signal = np.zeros(duration_samples, dtype=np.float64)
+    for freq, amp in zip(frequencies, amplitudes):
+        signal += amp * np.sin(2 * np.pi * freq * t)
+    return signal
+
+
 class TestSimpleFftBasic:
     """Basic pitch detection tests with pure sine waves."""
 
@@ -351,3 +367,82 @@ class TestSimpleFftCentsAccuracy:
 
         assert result.valid
         assert abs(result.primary_cents - cents) < 5.0, f"Expected ~{cents} cents, got {result.primary_cents}"
+
+
+class TestSimpleFftChords:
+    """Tests for chord (multiple note) detection."""
+
+    def setup_method(self):
+        self.detector = SimpleFftPeakDetector()
+
+    def process_signal(self, signal: np.ndarray):
+        """Process signal and return last valid result."""
+        hop_size = self.detector.hop_size
+        result = None
+        for start in range(0, len(signal) - hop_size, hop_size):
+            chunk = signal[start : start + hop_size]
+            result = self.detector.process(chunk)
+        return result
+
+    def test_major_third_c_e(self):
+        """Test C4 + E4 (major third) detection."""
+        signal = generate_multi_sine_waves([261.63, 329.63], SAMPLE_RATE * 2)
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 2
+
+        notes = [m.note_name for m in result.maxima[:2]]
+        assert "C" in notes
+        assert "E" in notes
+
+    def test_c_major_chord(self):
+        """Test C major chord (C4 + E4 + G4) detection."""
+        signal = generate_multi_sine_waves([261.63, 329.63, 392.0], SAMPLE_RATE * 2)
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [m.note_name for m in result.maxima[:3]]
+        assert "C" in notes
+        assert "E" in notes
+        assert "G" in notes
+
+    def test_a_minor_chord(self):
+        """Test A minor chord (A3 + C4 + E4) detection."""
+        signal = generate_multi_sine_waves([220.0, 261.63, 329.63], SAMPLE_RATE * 2)
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [m.note_name for m in result.maxima[:3]]
+        assert "A" in notes
+        assert "C" in notes
+        assert "E" in notes
+
+    def test_g_major_chord(self):
+        """Test G major chord (G3 + B3 + D4) detection."""
+        signal = generate_multi_sine_waves([196.0, 246.94, 293.66], SAMPLE_RATE * 2)
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 3
+
+        notes = [m.note_name for m in result.maxima[:3]]
+        assert "G" in notes
+        assert "B" in notes
+        assert "D" in notes
+
+    def test_power_chord(self):
+        """Test power chord (A2 + E3) detection."""
+        signal = generate_multi_sine_waves([110.0, 164.81], SAMPLE_RATE * 2)
+        result = self.process_signal(signal)
+
+        assert result.valid
+        assert result.note_count >= 2
+
+        notes = [m.note_name for m in result.maxima[:2]]
+        assert "A" in notes
+        assert "E" in notes

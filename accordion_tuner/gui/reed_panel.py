@@ -124,6 +124,7 @@ class ReedPanel(QFrame):
         sample_count: int = 0,
         precision_frequency: float | None = None,
         precision_cents: float | None = None,
+        note_name: str | None = None,
     ):
         """
         Set reed data.
@@ -137,7 +138,13 @@ class ReedPanel(QFrame):
             sample_count: Number of samples in the smoothed average
             precision_frequency: High-resolution frequency (when precision mode active)
             precision_cents: High-resolution cents deviation
+            note_name: Note name to display in title (e.g., "C4", "E4") - optional
         """
+        # Update title - show note name if provided, otherwise default "Reed N"
+        if note_name:
+            self._title_label.setText(note_name)
+        else:
+            self._title_label.setText(f"Reed {self._reed_number}")
         # Use precision frequency if available, otherwise regular
         display_freq = precision_frequency if precision_frequency is not None else frequency
         self._freq_label.setText(f"{display_freq:.2f} Hz")
@@ -170,6 +177,7 @@ class ReedPanel(QFrame):
 
     def set_inactive(self):
         """Set panel to inactive state."""
+        self._title_label.setText(f"Reed {self._reed_number}")
         self._cents_label.setText("--")
         self._cents_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
         self._freq_label.setText("-- Hz")

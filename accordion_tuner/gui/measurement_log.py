@@ -2,11 +2,11 @@
 Measurement log window for recording and exporting tuning measurements.
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QButtonGroup,
     QDoubleSpinBox,
@@ -21,23 +21,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..accordion import AccordionResult
+from ..accordion import AccordionResult, MeasurementEntry
 from .styles import (
     BORDER_COLOR,
     MAIN_WINDOW_STYLE,
     PANEL_BACKGROUND,
     TEXT_SECONDARY,
 )
-
-
-@dataclass
-class MeasurementEntry:
-    """A single recorded measurement."""
-
-    timestamp: str  # "HH:MM:SS"
-    note_name: str  # "A4"
-    ref_frequency: float  # 440.0
-    reeds: list[tuple[float, float]] = field(default_factory=list)  # [(freq, cents), ...]
 
 
 class MeasurementLogWindow(QWidget):
@@ -150,7 +140,9 @@ class MeasurementLogWindow(QWidget):
 
         # Configure table appearance
         self._table.setAlternatingRowColors(True)
-        self._table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self._table.verticalHeader().setVisible(False)
 
         # Set column resize modes
@@ -170,6 +162,14 @@ class MeasurementLogWindow(QWidget):
         self._copy_btn.setToolTip("Copy all measurements in tab-separated format")
         self._copy_btn.clicked.connect(self._copy_to_clipboard)
         buttons_layout.addWidget(self._copy_btn)
+
+        self._delete_last_btn = QPushButton("Delete Last")
+        self._delete_last_btn.clicked.connect(self._delete_last)
+        buttons_layout.addWidget(self._delete_last_btn)
+
+        self._delete_selected_btn = QPushButton("Delete Selected")
+        self._delete_selected_btn.clicked.connect(self._delete_selected)
+        buttons_layout.addWidget(self._delete_selected_btn)
 
         self._clear_btn = QPushButton("Clear All")
         self._clear_btn.clicked.connect(self._clear_all)
@@ -198,6 +198,9 @@ class MeasurementLogWindow(QWidget):
             }}
             QTableWidget::item:alternate {{
                 background-color: #252525;
+            }}
+            QTableWidget::item:selected {{
+                background-color: #0078d4;
             }}
             QHeaderView::section {{
                 background-color: {PANEL_BACKGROUND};
@@ -256,14 +259,32 @@ class MeasurementLogWindow(QWidget):
 
         # Create entry
         timestamp = datetime.now().strftime("%H:%M:%S")
-        note_name = f"{result.note_name}{result.octave}"
-        reeds = [(r.frequency, r.cents) for r in result.reeds]
+
+        # Check if this is a chord (has notes list with multiple entries)
+        is_chord = len(result.notes) > 1
+
+        if is_chord:
+            # Chord mode: build note names string like "C4|E4|G4"
+            note_names = [f"{n.note_name}{n.octave}" for n in result.notes]
+            note_name = "|".join(note_names)
+            # Use first note's ref frequency as primary
+            ref_frequency = result.notes[0].ref_frequency if result.notes else result.ref_frequency
+            # Store notes list for chord: (note_name, frequency, cents)
+            notes = [(f"{n.note_name}{n.octave}", n.reeds[0].frequency, n.reeds[0].cents) for n in result.notes if n.reeds]
+            reeds = []
+        else:
+            # Reed mode: use existing structure
+            note_name = f"{result.note_name}{result.octave}"
+            ref_frequency = result.ref_frequency
+            reeds = [(r.frequency, r.cents) for r in result.reeds]
+            notes = []
 
         entry = MeasurementEntry(
             timestamp=timestamp,
             note_name=note_name,
-            ref_frequency=result.ref_frequency,
+            ref_frequency=ref_frequency,
             reeds=reeds,
+            notes=notes,
         )
         self._entries.append(entry)
 
@@ -275,15 +296,27 @@ class MeasurementLogWindow(QWidget):
         self._table.setItem(row, 1, QTableWidgetItem(entry.note_name))
         self._table.setItem(row, 2, QTableWidgetItem(f"{entry.ref_frequency:.2f}"))
 
-        # Add reed data (up to 4 reeds)
-        for i, (freq, cents) in enumerate(entry.reeds):
-            if i >= 4:
-                break
-            col_freq = 3 + i * 2
-            col_cents = 4 + i * 2
-            self._table.setItem(row, col_freq, QTableWidgetItem(f"{freq:.2f}"))
-            cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
-            self._table.setItem(row, col_cents, QTableWidgetItem(cents_str))
+        # Add reed data (up to 4 reeds) or chord notes
+        if is_chord:
+            # Chord mode: use reed columns for chord notes
+            for i, (_, freq, cents) in enumerate(entry.notes):
+                if i >= 4:
+                    break
+                col_freq = 3 + i * 2
+                col_cents = 4 + i * 2
+                self._table.setItem(row, col_freq, QTableWidgetItem(f"{freq:.2f}"))
+                cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
+                self._table.setItem(row, col_cents, QTableWidgetItem(cents_str))
+        else:
+            # Reed mode: original behavior
+            for i, (freq, cents) in enumerate(entry.reeds):
+                if i >= 4:
+                    break
+                col_freq = 3 + i * 2
+                col_cents = 4 + i * 2
+                self._table.setItem(row, col_freq, QTableWidgetItem(f"{freq:.2f}"))
+                cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
+                self._table.setItem(row, col_cents, QTableWidgetItem(cents_str))
 
         # Scroll to bottom
         self._table.scrollToBottom()
@@ -322,10 +355,23 @@ class MeasurementLogWindow(QWidget):
                 f"{entry.ref_frequency:.2f}",
             ]
 
-            # Add reed data (up to 4 reeds)
+            # Determine if this is a chord entry
+            if entry.notes:
+                # Chord mode: use notes data
+                data_source = entry.notes
+            else:
+                # Reed mode: use reeds data
+                data_source = entry.reeds
+
+            # Add reed/note data (up to 4)
             for i in range(4):
-                if i < len(entry.reeds):
-                    freq, cents = entry.reeds[i]
+                if i < len(data_source):
+                    if entry.notes:
+                        # Chord: (note_name, freq, cents)
+                        _, freq, cents = data_source[i]
+                    else:
+                        # Reed: (freq, cents)
+                        freq, cents = data_source[i]
                     row.append(f"{freq:.2f}")
                     cents_str = f"{cents:+.1f}" if cents != 0 else "0.0"
                     row.append(cents_str)
@@ -341,6 +387,40 @@ class MeasurementLogWindow(QWidget):
         clipboard.setText(text)
 
         self._status_label.setText(f"Copied {len(self._entries)} entries")
+
+    def _delete_last(self):
+        """Delete the last measurement entry."""
+        if not self._entries:
+            return
+
+        # Remove last entry from list
+        self._entries.pop()
+
+        # Remove last row from table
+        last_row = self._table.rowCount() - 1
+        if last_row >= 0:
+            self._table.removeRow(last_row)
+
+        # Update count
+        self._count_label.setText(f"{len(self._entries)} entries")
+        self._status_label.setText("Deleted last entry")
+
+    def _delete_selected(self):
+        """Delete selected measurement entries."""
+        selected_rows = sorted(
+            set(index.row() for index in self._table.selectedIndexes()),
+            reverse=True,  # Delete from bottom up to preserve indices
+        )
+        if not selected_rows:
+            return
+
+        for row in selected_rows:
+            self._entries.pop(row)
+            self._table.removeRow(row)
+
+        count = len(selected_rows)
+        self._count_label.setText(f"{len(self._entries)} entries")
+        self._status_label.setText(f"Deleted {count} {'entry' if count == 1 else 'entries'}")
 
     def _clear_all(self):
         """Clear all measurements."""

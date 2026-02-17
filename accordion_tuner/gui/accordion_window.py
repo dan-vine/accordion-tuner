@@ -304,11 +304,8 @@ class AccordionWindow(QMainWindow):
 
     def _create_reed_panels(self, num_reeds: int | None = None):
         """Create reed panels based on number of reeds."""
-        # Use provided value, or get from dropdown if available, otherwise use stored value
         if num_reeds is not None:
             self._num_reeds = num_reeds
-        elif hasattr(self, "_reeds_combo"):
-            self._num_reeds = self._reeds_combo.currentIndex() + 1
 
         # Clear all items from layout (panels and stretches)
         while self._reed_container.count():

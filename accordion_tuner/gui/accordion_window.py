@@ -400,12 +400,12 @@ class AccordionWindow(QMainWindow):
         algo_row.addWidget(QLabel("Algorithm:"))
         self._algorithm_combo = QComboBox()
         self._algorithm_combo.setFixedWidth(160)
-        self._algorithm_combo.addItems(["FFT (Phase Vocoder)", "ESPRIT", "Simple FFT"])
+        self._algorithm_combo.addItems(["FFT (Phase Vocoder)", "Simple FFT", "ESPRIT"])
         self._algorithm_combo.setCurrentIndex(0)
         self._algorithm_combo.setToolTip(
-            "FFT: Fast, reliable detection using phase vocoder\n"
-            "ESPRIT: Good for closely-spaced frequencies\n"
-            "Simple FFT: Best for close frequencies, needs time to stabilize"
+            "FFT: Fast, reliable detection. Best for wider reed spreads.\n"
+            "Simple FFT: Good for close frequencies, needs time to stabilize.\n"
+            "ESPRIT: Best for closely-spaced frequencies (tight tremolo). Reed mode only."
         )
         self._algorithm_combo.currentIndexChanged.connect(self._on_algorithm_changed)
         algo_row.addWidget(self._algorithm_combo)
@@ -946,27 +946,27 @@ class AccordionWindow(QMainWindow):
     def _on_algorithm_changed(self, index: int):
         """Handle algorithm combo change."""
         if index == 1:
-            detector_type = DetectorType.ESPRIT
-        elif index == 2:
             detector_type = DetectorType.SIMPLE_FFT
+        elif index == 2:
+            detector_type = DetectorType.ESPRIT
         else:
             detector_type = DetectorType.FFT
         self._detector.set_detector_type(detector_type)
 
         # Show/hide ESPRIT options
-        self._esprit_frame.setVisible(index == 1)
+        self._esprit_frame.setVisible(index == 2)
 
         # Show/hide SimpleFFT options
-        self._simple_fft_frame.setVisible(index == 2)
+        self._simple_fft_frame.setVisible(index == 1)
 
         # Apply current ESPRIT settings when switching to ESPRIT
-        if index == 1:
+        if index == 2:
             self._on_esprit_width_changed(self._esprit_width_slider.value())
             self._on_esprit_sep_changed(self._esprit_sep_slider.value())
             self._on_esprit_offsets_changed(self._esprit_offsets_combo.currentIndex())
 
         # Apply current SimpleFFT settings when switching to SimpleFFT
-        if index == 2:
+        if index == 1:
             self._on_simple_fft_search_changed(self._simple_fft_search_slider.value())
             self._on_simple_fft_threshold_changed(self._simple_fft_threshold_slider.value())
 
@@ -1344,8 +1344,11 @@ class AccordionWindow(QMainWindow):
         """Display the given result on all UI components."""
         if self._detection_mode == DetectionMode.CHORDS:
             self._display_chord_result(result)
-            return
+        else:
+            self._display_reed_result(result)
 
+    def _display_reed_result(self, result: AccordionResult):
+        """Display single-note reed tuning result."""
         # Update note display
         self._note_display.set_note(
             result.note_name,
@@ -1495,27 +1498,34 @@ class AccordionWindow(QMainWindow):
 
     def _update_settings_for_detection_mode(self):
         """Enable/disable settings based on detection mode."""
-        if self._detection_mode == DetectionMode.CHORDS:
-            # In chord mode, reeds combo controls number of chord notes to display
-            self._reeds_combo.setEnabled(True)
-            self._octave_filter_cb.setEnabled(False)
+        is_chord_mode = self._detection_mode == DetectionMode.CHORDS
+        is_reed_mode = not is_chord_mode
+
+        # Reeds combo always enabled (controls notes in chord mode, reeds in reed mode)
+        self._reeds_combo.setEnabled(True)
+
+        # Reed-specific settings
+        self._octave_filter_cb.setEnabled(is_reed_mode)
+        self._fundamental_filter_cb.setEnabled(is_reed_mode)
+        self._reed_spread_slider.setEnabled(is_reed_mode)
+        self._profile_combo.setEnabled(is_reed_mode)
+
+        # Uncheck filters when entering chord mode
+        if is_chord_mode:
             self._octave_filter_cb.setChecked(False)
-            self._fundamental_filter_cb.setEnabled(False)
             self._fundamental_filter_cb.setChecked(False)
-            self._reed_spread_slider.setEnabled(False)
-            self._profile_combo.setEnabled(False)
-            self._simple_fft_search_slider.setEnabled(False)
-            self._simple_fft_threshold_slider.setEnabled(False)
+
+        # ESPRIT doesn't work well in chord mode - disable it (index 2)
+        esprit_index = 2
+        if is_chord_mode:
+            # If ESPRIT is currently selected, switch to FFT
+            if self._algorithm_combo.currentIndex() == esprit_index:
+                self._algorithm_combo.setCurrentIndex(0)
+            # Mark ESPRIT as unavailable with visible text change
+            self._algorithm_combo.setItemText(esprit_index, "ESPRIT (reed mode only)")
         else:
-            self._reeds_combo.setEnabled(True)
-            self._octave_filter_cb.setEnabled(True)
-            self._fundamental_filter_cb.setEnabled(True)
-            self._reed_spread_slider.setEnabled(True)
-            self._profile_combo.setEnabled(True)
-            algo = self._algorithm_combo.currentIndex()
-            if algo == 2:
-                self._simple_fft_search_slider.setEnabled(True)
-                self._simple_fft_threshold_slider.setEnabled(True)
+            # Restore ESPRIT option text
+            self._algorithm_combo.setItemText(esprit_index, "ESPRIT")
 
     def _on_reference_changed(self, value: float):
         """Handle reference frequency change."""

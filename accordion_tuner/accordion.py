@@ -61,7 +61,11 @@ class ReedInfo:
 
 @dataclass
 class NoteGroup:
-    """A group of reeds playing the same musical note."""
+    """A detected note with its reeds.
+
+    In reed mode: multiple reeds playing the same note (tremolo).
+    In chord mode: typically a single reed per note.
+    """
 
     note_name: str = ""  # e.g., "C"
     octave: int = 0  # e.g., 4
@@ -265,19 +269,6 @@ class AccordionDetector:
         """Set the detection mode (REEDS or CHORDS)."""
         self._detection_mode = mode
 
-        # In chord mode, increase num_sources to detect more notes
-        if mode == DetectionMode.CHORDS:
-            if isinstance(self._detector, EspritPitchDetector):
-                self._detector.set_num_sources(8)
-            elif isinstance(self._detector, SimpleFftPeakDetector):
-                self._detector.set_num_sources(8)
-        else:
-            # Restore max_reeds in reed mode
-            if isinstance(self._detector, EspritPitchDetector):
-                self._detector.set_num_sources(self.max_reeds)
-            elif isinstance(self._detector, SimpleFftPeakDetector):
-                self._detector.set_num_sources(self.max_reeds)
-
     def get_detection_mode(self) -> DetectionMode:
         """Get the current detection mode."""
         return self._detection_mode
@@ -337,8 +328,6 @@ class AccordionDetector:
             note_name=primary.note_name,
             octave=primary.octave,
             ref_frequency=primary.ref_frequency,
-            reeds=primary.reeds,
-            beat_frequencies=primary.beat_frequencies,
             spectrum_data=self._get_spectrum_tuple(),
             notes=note_groups,
         )
